@@ -1,28 +1,66 @@
+Imports System
+Imports System.Collections
+Imports System.Collections.Generic
+Imports System.ComponentModel
+Imports System.Diagnostics
+Imports System.Drawing
+Imports System.IO
+Imports System.Runtime.CompilerServices
 Imports System.Runtime.InteropServices
+Imports System.Security.Principal
+Imports System.Text
+Imports System.Windows.Forms
+Imports Microsoft.VisualBasic.CompilerServices
+Imports LCARS
+Imports LCARS.Controls
 
-Public Class frmKeyboard
+Partial Public Class frmKeyboard
+        Public Structure RECT
+            Public Left_Renamed As Integer
 
-    Private Declare Function GetKeyState Lib "user32" (ByVal nVirtKey As Long) As Integer
+            Public Top_Renamed As Integer
 
+            Public Right_Renamed As Integer
 
-#Region " Send Windows Key "
+            Public Bottom_Renamed As Integer
+        End Structure
 
-    Private Declare Sub keybd_event Lib "user32" (ByVal bVk As Byte, ByVal bScan As Byte, ByVal dwFlags As Long, ByVal dwExtraInfo As Long)
-    Const WM_KEYDOWN = &H100
-    Const WM_KEYUP = &H101
-    Const VK_RETURN = &HD
+        Private Class ButtonLayout
+        Public Left As Integer
+        Public Top As Integer
+        Public Width As Integer
+        Public Height As Integer
+        Public Control As Control
+        Public InPanel2 As Boolean
+    End Class
 
+    ' Designer geometry (frmKeyboard.designer.vb).
+    Private Const DesignClientWidth As Integer = 1350
+    Private Const DesignClientHeight As Integer = 542
+    Private Const DesignSplitWidth As Integer = 1339
+    Private Const DesignSplitHeight As Integer = 476
+    Private Const DesignSplitDist As Integer = 1048
+    Private Const DesignSplitLeft As Integer = 7
+    Private Const DesignSplitTop As Integer = 60
+    ' Bump when default size / scale policy changes.
+    Private Const CurrentSizeSchema As String = "18"
+    ' Internal only (scale logs); title bar is always "MOVE KEYPAD".
+    Private Const OskBuildId As String = "171"
+    Private _scaleBusy As Boolean
+    Private _snapEnabled As Boolean = True
+    Private _startupInitDone As Boolean = False
+    Private _hiddenInitQueued As Boolean = False
+    Private _snapBusy As Boolean
+    Private _snapPreviewPoint As Point = Point.Empty
+    ' Hard ceiling for this session — hug/scale must never exceed this.
+    Private _oskMaxSize As Size = Size.Empty
+    Private _oskTargetSize As Size = Size.Empty
+    ' True design content extents (max Right/Bottom of keys), not Panel.Width at Load.
+    Private contentW1 As Integer = 1016
+    Private contentH1 As Integer = 470
+    Private contentW2 As Integer = 262
+    Private contentH2 As Integer = 470
 
-    Private Const KEYEVENTF_EXTENDEDKEY As Long = &H1
-    Private Const KEYEVENTF_KEYUP As Long = &H2
-    Private Const VK_LWIN As Byte = &H5B
-    Private Const VK_SCROLL = &H91
-    Private Const VK_NUMLOCK = &H90
-    Private Const VK_CAPITAL = &H14
-    Private Const VK_ALT = &H12
-    Private Const VK_TAB = &H9
-    Private Const VK_0 = &H30
-    Private Const VK_PRINT = &H2A
 
 
 
@@ -31,2019 +69,2954 @@ Public Class frmKeyboard
 
 
 
-#End Region
 
-#Region " Keep keyboard on top and don't activate "
 
-    <DllImport("user32.dll")> _
-    Public Shared Function SetWindowLong(ByVal hWnd As IntPtr, ByVal nIndex As Integer, ByVal dwNewLong As IntPtr) As Integer
-    End Function
 
-    <DllImport("user32.dll", SetLastError:=True)> _
-    Public Shared Function GetWindowLong(ByVal hWnd As IntPtr, ByVal nIndex As Integer) As UInt32
-    End Function
 
-#End Region
 
-#Region " Working Area "
-    'Constants for setting the "working area" (the area programs load)
-    Public Const SPI_SETWORKAREA = 47
-    Public Const SPIF_SENDWININICHANGE = &H2
-    Public Const SPIF_UPDATEINIFILE = &H1
-    Public Const SPIF_change = SPIF_UPDATEINIFILE Or SPIF_SENDWININICHANGE
 
-    Public Structure RECT
-        Dim Left_Renamed As Integer
-        Dim Top_Renamed As Integer
-        Dim Right_Renamed As Integer
-        Dim Bottom_Renamed As Integer
-    End Structure
 
-    'used to set the working area
-    ' <System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint:="SystemParametersInfoA")> _
-    Public Declare Function SystemParametersInfo Lib "user32" Alias "SystemParametersInfoA" (ByVal uAction As Int32, ByVal uParam As Int32, ByVal lpvParam As IntPtr, ByVal fuWinIni As Int32) As Int32
 
-#End Region
 
 
-    Dim SHIFT As Boolean = False
-    Dim CAPS As Boolean = False
-    Dim CTRL As Boolean = False
-    Dim ALT As Boolean = False
-    Dim WIN As Boolean = False
-    Dim tab As Boolean = False
 
 
-    Dim buttons As New Collection
-    Dim oWidth As Integer
-    Dim oHeight As Integer
-    Dim o2Width As Integer
-    Dim o2Height As Integer
-    Dim isInit As Boolean = False
 
-    Dim uppercase As Boolean = False
-    Dim numLockShift As Boolean = False
 
-    Dim increment As Integer = 20
 
-    Dim oLoc As Point
-    Dim isMoving As Boolean = False
 
-    Private Structure buttonData
-        Dim width As Integer
-        Dim height As Integer
-        Dim left As Integer
-        Dim top As Integer
-        Dim control As LCARS.LCARSbuttonClass
 
-    End Structure
 
-    Private Sub frmKeyboard_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
-        oWidth = SplitContainer1.Panel1.Width
-        oHeight = SplitContainer1.Panel1.Height
 
-        o2Width = SplitContainer1.Panel2.Width
-        o2Height = SplitContainer1.Panel2.Height
 
-        ' style of window?
-        Dim GWL_EXSTYLE As Integer = (-20)
-        ' get - retrieves information about a specified window
-        GetWindowLong(Me.Handle, GWL_EXSTYLE)
-        ' set - changes the attribute of a specified window - I think this stops it being focused on
-        SetWindowLong(Me.Handle, GWL_EXSTYLE, &H8000000)
 
-        For Each myButton As Control In SplitContainer1.Panel1.Controls
-            Dim newbutton As New buttonData
-            newbutton.width = myButton.Width
-            newbutton.height = myButton.Height
-            newbutton.left = myButton.Left
-            newbutton.top = myButton.Top
-            newbutton.control = myButton
-            buttons.Add(newbutton)
 
-        Next
 
-        For Each myButton As Control In SplitContainer1.Panel2.Controls
-            Dim newbutton As New buttonData
-            newbutton.width = myButton.Width
-            newbutton.height = myButton.Height
-            newbutton.left = myButton.Left
-            newbutton.top = myButton.Top
-            newbutton.control = myButton
-            buttons.Add(newbutton)
 
-        Next
-        Dim myScreen As Screen = Screen.FromPoint(New Point(Me.Left, Me.Top))
 
-        Dim tmpStr As String = GetSetting("x32_OSK", "Settings", "Size", myScreen.Bounds.Width * 0.75 & ", " & 250)
-        Dim split() As String = tmpStr.Split(",")
 
-        Me.Width = split(0)
-        Me.Height = split(1)
 
-        tmpStr = GetSetting("x32_OSK", "Settings", "Location", myScreen.Bounds.Left + myScreen.Bounds.Width * 0.125 & ", " & myScreen.Bounds.Height - Me.Height)
 
-        split = tmpStr.Split(",")
 
 
-        Me.Left = split(0)
-        Me.Top = split(1)
 
-        isInit = True
 
-        Dim newWidth As Double = SplitContainer1.Panel1.Width / oWidth
-        Dim newHeight As Double = SplitContainer1.Panel1.Height / oHeight
 
-        SplitContainer1.Visible = False
 
-        For i As Integer = 1 To buttons.Count
-            buttons(i).Control.Left = buttons(i).left * newWidth
-            buttons(i).control.top = buttons(i).top * newHeight
-            buttons(i).Control.Width = buttons(i).width * newWidth
-            buttons(i).Control.Height = buttons(i).height * newHeight
 
-        Next
 
-        SplitContainer1.Visible = True
 
-        SaveSetting("x32_OSK", "Settings", "Size", Me.Width & ", " & Me.Height)
-        My.Settings.Save()
 
 
 
-        'frmKeyboard_ResizeEnd(sender, e)
 
-        'Function Button code
-        UserButtons.Hide()
-        sbFn.Clickable = False
-        sbFn.Color = LCARS.LCARScolorStyles.FunctionUnavailable
 
-        loadFNbuttons()
 
 
-        'If numbers lock is on, sets numbers lock button to primary colour.
-        If GetKeyState(Keys.NumLock) = 1 Then
-            btnnumlock.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Else
-            btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction
-        End If
 
-        'If scroll lock is on, sets scroll lock button to primary colour.
-        If GetKeyState(Keys.Scroll) = 1 Then
-            btnScrollLock.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Else
-            btnScrollLock.Color = LCARS.LCARScolorStyles.SystemFunction
-        End If
 
-        'Code for size mode on start up
-        Dim mode As Boolean
-        mode = My.Settings.Mode
-        If mode = True Then
-            sbNum_Click(sender, e)
-        End If
 
-        Me.Show()
 
 
-    End Sub
 
-    Public Sub loadFNbuttons()
 
-        If My.Settings.FN1Name = "" Then
-            sbFn1.ButtonText = "FN1"
-        Else
-            If Not My.Settings.FN1Name = "" Then
-                sbFn1.ButtonText = My.Settings.FN1Name
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        Private Const WM_KEYDOWN As Integer = 256
+
+        Private Const WM_KEYUP As Integer = 257
+
+        Private Const VK_RETURN As Integer = 13
+
+        Private Const KEYEVENTF_EXTENDEDKEY As Long = 1L
+
+        Private Const KEYEVENTF_KEYUP As Long = 2L
+
+        Private Const VK_LWIN As Byte = 91
+
+        Private Const VK_SCROLL As Integer = 145
+
+        Private Const VK_NUMLOCK As Integer = 144
+
+        Private Const VK_CAPITAL As Integer = 20
+
+        Private Const VK_ALT As Integer = 18
+
+        Private Const VK_TAB As Integer = 9
+
+        Private Const VK_0 As Integer = 48
+
+        Private Const VK_PRINT As Integer = 42
+
+        Private Const VK_BACK As Integer = 8
+
+        Private Const VK_DELETE As Integer = 46
+
+        Private Const VK_RETURN_BYTE As Byte = 13
+
+        Private Const VK_ESCAPE As Integer = 27
+
+        Private Const GA_ROOT As Integer = 2
+
+        Private Shared ReadOnly WM_LCARS_OSK_INPUT As Integer
+
+        Private Const OskInputChar As Integer = 1
+
+        Private Const OskInputVk As Integer = 2
+
+        Private _lastInputTarget As IntPtr
+
+        Private Const GWL_EXSTYLE As Integer = -20
+
+        Private Const WS_EX_NOACTIVATE As Integer = 134217728
+
+        Private Const WS_EX_TOOLWINDOW As Integer = 128
+
+        Public Const SPI_SETWORKAREA As Integer = 47
+
+        Public Const SPIF_SENDWININICHANGE As Integer = 2
+
+        Public Const SPIF_UPDATEINIFILE As Integer = 1
+
+        Public Const SPIF_change As Integer = 3
+
+        Private SHIFT As Boolean
+
+        Private CAPS As Boolean
+
+        Private CTRL As Boolean
+
+        Private ALT As Boolean
+
+        Private WIN As Boolean
+
+        Private tab As Boolean
+
+        Private buttons As New List(Of ButtonLayout)
+
+        Private oWidth As Integer
+
+        Private oHeight As Integer
+
+        Private o2Width As Integer
+
+        Private o2Height As Integer
+
+        Private capturedSplitterDistance As Integer
+
+        Private isInit As Boolean
+
+        Private uppercase As Boolean
+
+        Private numLockShift As Boolean
+
+        Private increment As Integer
+
+        Private oLoc As Point
+
+        Private isMoving As Boolean
+
+        Private _startHidden As Boolean
+
+        Private _hiddenStartupApplied As Boolean
+
+        Private _allowProcessExit As Boolean
+
+        Private Shared ReadOnly WM_LCARS_OSK_CMD As Integer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        Protected Overrides ReadOnly Property ShowWithoutActivation As Boolean
+            Get
+                Return True
+            End Get
+        End Property
+
+        Protected Overrides ReadOnly Property CreateParams As CreateParams
+            Get
+                Dim lCreateParams = MyBase.CreateParams
+                lCreateParams.ExStyle = lCreateParams.ExStyle Or &H8000000 Or &H80
+                Return lCreateParams
+            End Get
+        End Property
+
+        Shared Sub New()
+            Dim lpString = "LCARS_OSK_INPUT"
+            WM_LCARS_OSK_INPUT = RegisterWindowMessageA(lpString)
+            lpString = "LCARS_OSK_CMD"
+            WM_LCARS_OSK_CMD = RegisterWindowMessageA(lpString)
+        End Sub
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function GetKeyState(nVirtKey As Long) As Integer
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Sub keybd_event(bVk As Byte, bScan As Byte, dwFlags As Long, dwExtraInfo As Long)
+        End Sub
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function GetForegroundWindow() As IntPtr
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function SetForegroundWindow(hWnd As IntPtr) As Boolean
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function IsWindow(hWnd As IntPtr) As Boolean
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function GetAncestor(hwnd As IntPtr, gaFlags As Integer) As IntPtr
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function GetWindowThreadProcessId(hWnd As IntPtr, ByRef lpdwProcessId As Integer) As Integer
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, EntryPoint:="GetWindowTextLengthA", ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function GetWindowTextLength(hwnd As IntPtr) As Integer
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function GetWindowTextA(hWnd As IntPtr, lpString As StringBuilder, nMaxCount As Integer) As Integer
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function PostMessageA(hWnd As IntPtr, Msg As Integer, wParam As IntPtr, lParam As IntPtr) As Boolean
+        End Function
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function FindWindowA(
+        <MarshalAs(UnmanagedType.VBByRefStr)> ByRef lpClassName As String,
+        <MarshalAs(UnmanagedType.VBByRefStr)> ByRef lpWindowName As String) As IntPtr
+        End Function
+
+        <DllImport("user32.dll", CharSet:=CharSet.Ansi, ExactSpelling:=True, SetLastError:=True)>
+        Private Shared Function RegisterWindowMessageA(
+        <MarshalAs(UnmanagedType.VBByRefStr)> ByRef lpString As String) As Integer
+        End Function
+
+        <DllImport("user32.dll")>
+        Public Shared Function SetWindowLong(hWnd As IntPtr, nIndex As Integer, dwNewLong As IntPtr) As Integer
+        End Function
+
+        <DllImport("user32.dll", SetLastError:=True)>
+        Public Shared Function GetWindowLong(hWnd As IntPtr, nIndex As Integer) As UInteger
+        End Function
+
+        <DllImport("user32.dll", SetLastError:=True)>
+        Private Shared Function SetWindowPos(hWnd As IntPtr, hWndInsertAfter As IntPtr,
+                                             X As Integer, Y As Integer, cx As Integer, cy As Integer,
+                                             uFlags As UInteger) As Boolean
+        End Function
+        Private Const SWP_NOZORDER As UInteger = &H4UI
+        Private Const SWP_NOACTIVATE As UInteger = &H10UI
+        Private Const SWP_SHOWWINDOW As UInteger = &H40UI
+
+        Private Sub ApplyNoActivateStyle()
+            Dim windowLong As UInteger = GetWindowLong(MyBase.Handle, -20)
+            Dim num As UInteger = windowLong Or &H8000000UI Or &H80UI
+            SetWindowLong(MyBase.Handle, -20, New IntPtr(CLng(num)))
+        End Sub
+
+        <DllImport("user32", CharSet:=CharSet.Ansi, EntryPoint:="SystemParametersInfoA", ExactSpelling:=True, SetLastError:=True)>
+        Public Shared Function SystemParametersInfo(uAction As Integer, uParam As Integer, lpvParam As IntPtr, fuWinIni As Integer) As Integer
+        End Function
+
+        Public Sub New()
+            _lastInputTarget = IntPtr.Zero
+            SHIFT = False
+            CAPS = False
+            CTRL = False
+            ALT = False
+            WIN = False
+            tab = False
+            buttons = New List(Of ButtonLayout)()
+            isInit = False
+            uppercase = False
+            numLockShift = False
+            increment = 20
+            isMoving = False
+            _startHidden = False
+            _hiddenStartupApplied = False
+            _allowProcessExit = False
+            InitializeComponent()
+            AutoScaleMode = AutoScaleMode.None
+            ' Designer still holds full-layout geometry for key capture; start compact immediately
+            ' so a failed Load path cannot leave the 1350x542 design window on screen.
+            Try
+                Me.MaximumSize = New Size(700, 240)
+                Me.MinimumSize = New Size(200, 110)
+                Me.ClientSize = New Size(640, 210)
+            Catch
+            End Try
+            ApplyOskTitleStamp()
+            Dim commandLineArgs As String() = Environment.GetCommandLineArgs()
+            For Each arg As String In commandLineArgs
+                Dim a As String = arg.Trim()
+                If String.Equals(a, "--hidden", StringComparison.OrdinalIgnoreCase) OrElse String.Equals(a, "/hidden", StringComparison.OrdinalIgnoreCase) Then
+                    _startHidden = True
+                    Exit For
+                End If
+            Next
+        End Sub
+
+        Private Sub ApplyOskTitleStamp()
+            Try
+                If sbTitle IsNot Nothing Then
+                    sbTitle.ButtonText = "MOVE KEYPAD"
+                    sbTitle.Text = "MOVE KEYPAD"
+                End If
+            Catch
+            End Try
+        End Sub
+
+        Protected Overrides Sub SetVisibleCore(value As Boolean)
+            If Not IsHandleCreated Then
+                CreateHandle()
             End If
-        End If
-
-        If My.Settings.FN2Name = "" Then
-            sbFn2.ButtonText = "FN2"
-        Else
-            If Not My.Settings.FN2Name = "" Then
-                sbFn2.ButtonText = My.Settings.FN2Name
+            If _startHidden AndAlso Not _hiddenStartupApplied Then
+                _hiddenStartupApplied = True
+                ' Stay hidden for prewarm. Do NOT run heavy init inside SetVisibleCore —
+                ' that re-enters WinForms during Application.Run startup and can leave the
+                ' form unable to become visible later.
+                MyBase.SetVisibleCore(False)
+                If Not _hiddenInitQueued Then
+                    _hiddenInitQueued = True
+                    Try
+                        BeginInvoke(New MethodInvoker(Sub() PerformStartupInit("hidden-prewarm")))
+                    Catch
+                        ' Handle not ready to invoke yet — Load/show will init.
+                        _hiddenInitQueued = False
+                    End Try
+                End If
+                Return
             End If
-        End If
+            MyBase.SetVisibleCore(value)
+        End Sub
 
-        If My.Settings.FN3Name = "" Then
-            sbFN3.ButtonText = "FN3"
-        Else
-            If Not My.Settings.FN3Name = "" Then
-                sbFN3.ButtonText = My.Settings.FN3Name
-            End If
-        End If
-
-        If My.Settings.FN4Name = "" Then
-            sbFn4.ButtonText = "FN4"
-        Else
-            If Not My.Settings.FN4Name = "" Then
-                sbFn4.ButtonText = My.Settings.FN4Name
-            End If
-        End If
-
-        If My.Settings.FN5Name = "" Then
-            sbFn5.ButtonText = "FN5"
-        Else
-            If Not My.Settings.FN5Name = "" Then
-                sbFn5.ButtonText = My.Settings.FN5Name
-            End If
-        End If
-
-        If My.Settings.FN6Name = "" Then
-            sbFn6.ButtonText = "FN6"
-        Else
-            If Not My.Settings.FN6Name = "" Then
-                sbFn6.ButtonText = My.Settings.FN6Name
-            End If
-        End If
-
-        If My.Settings.FN7Name = "" Then
-            sbFn7.ButtonText = "FN7"
-        Else
-            If Not My.Settings.FN7Name = "" Then
-                sbFn7.ButtonText = My.Settings.FN7Name
-            End If
-        End If
-
-        If My.Settings.FN8Name = "" Then
-            sbFn8.ButtonText = "FN8"
-        Else
-            If Not My.Settings.FN8Name = "" Then
-                sbFn8.ButtonText = My.Settings.FN8Name
-            End If
-        End If
-
-        If My.Settings.FN9Name = "" Then
-            sbFn9.ButtonText = "FN9"
-        Else
-            If Not My.Settings.FN9Name = "" Then
-                sbFn9.ButtonText = My.Settings.FN9Name
-            End If
-        End If
-
-        If My.Settings.FN10Name = "" Then
-            sbFn10.ButtonText = "FN10"
-        Else
-            If Not My.Settings.FN10Name = "" Then
-                sbFn10.ButtonText = My.Settings.FN10Name
-            End If
-        End If
-
-        If My.Settings.FN11Name = "" Then
-            sbFn11.ButtonText = "FN11"
-        Else
-            If Not My.Settings.FN11Name = "" Then
-                sbFn11.ButtonText = My.Settings.FN11Name
-            End If
-        End If
-
-        If My.Settings.FN12Name = "" Then
-            sbFn12.ButtonText = "FN12"
-        Else
-            If Not My.Settings.FN12Name = "" Then
-                sbFn12.ButtonText = My.Settings.FN12Name
-            End If
-        End If
-
-    End Sub
-
-    Public Sub frmKeyboard_ResizeEnd(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.ResizeEnd
-        Dim newWidth As Double = SplitContainer1.Panel1.Width / oWidth
-        Dim newHeight As Double = SplitContainer1.Panel1.Height / oHeight
-
-        SplitContainer1.Visible = False
-
-        For i As Integer = 1 To buttons.Count
-            buttons(i).Control.Left = buttons(i).left * newWidth
-            buttons(i).control.top = buttons(i).top * newHeight
-            buttons(i).Control.Width = buttons(i).width * newWidth
-            buttons(i).Control.Height = buttons(i).height * newHeight
-
-        Next
-
-        SplitContainer1.Visible = True
-
-        SaveSetting("x32_OSK", "Settings", "Size", Me.Width & ", " & Me.Height)
-        My.Settings.Save()
-
-
-    End Sub
-
-
-    Private Sub StandardKey_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sb1.Click, sb2.Click, sb3.Click, sb4.Click, sb5.Click, sb6.Click, sb7.Click, sb8.Click, sb9.Click, sb0.Click, sbSpace.Click, sbTilde.Click, sbMinus.Click, sbEqual.Click, sbBackSlash.Click, sbForwardSlash.Click, sbLBracket.Click, sbRBracket.Click, sbSemiColon.Click, sbQuote.Click, sbComma.Click, sbPeriod.Click, sbBack.Click, sbEnter.Click, sbESC.Click, sbF1.Click, sbF2.Click, sbF3.Click, sbF4.Click, sbF5.Click, sbF6.Click, sbF7.Click, sbF8.Click, sbF9.Click, sbF10.Click, sbF11.Click, sbF12.Click, sbDEL.Click, sbREnter.Click
-
-        Dim keyData As String = ""
-
-
-
-
-        If CTRL = True Then
-            keyData &= "^"
-        End If
-
-        If ALT = True Then
-            keyData &= "%"
-        End If
-
-        If SHIFT = True Then
-            keyData &= "+"
-        End If
-
-        Try
-            If keyData <> "" Then
-                SendKeys.Send(keyData & "{" & sender.buttontext & "}")
+        Protected Overrides Sub WndProc(ByRef m As Message)
+            If WM_LCARS_OSK_CMD <> 0 AndAlso m.Msg = WM_LCARS_OSK_CMD Then
+                If m.WParam.ToInt32() <> 0 Then
+                    ' Keep this handler FAST — LCARS uses SendMessage and then ShowWindow.
+                    ' Heavy scale here deadlocks/races and the keyboard never appears.
+                    Try
+                        If WindowState = FormWindowState.Minimized Then
+                            WindowState = FormWindowState.Normal
+                        End If
+                        PerformStartupInit("show-cmd")
+                        Try
+                            Opacity = 1.0R
+                        Catch
+                        End Try
+                        ClampOskOnScreen("show-cmd")
+                        Show()
+                        Visible = True
+                        TopMost = True
+                        BringToFront()
+                        ApplyNoActivateStyle()
+                        ApplyOskTitleStamp()
+                        WriteScaleLog("show-cmd visible=" & Visible.ToString() &
+                                      " loc=" & Left.ToString() & "," & Top.ToString() &
+                                      " size=" & Width.ToString() & "x" & Height.ToString())
+                    Catch ex As Exception
+                        WriteScaleLog("show-cmd EX " & ex.ToString())
+                    End Try
+                Else
+                    Hide()
+                End If
+                m.Result = New IntPtr(1)
+                Return
             Else
-                SendKeys.Send("{" & sender.buttontext & "}")
+                MyBase.WndProc(m)
+            End If
+        End Sub
+
+        Private Sub frmKeyboard_FormClosing(sender As Object, e As FormClosingEventArgs) Handles Me.FormClosing
+            If Not _allowProcessExit AndAlso e.CloseReason <> CloseReason.WindowsShutDown AndAlso e.CloseReason <> CloseReason.TaskManagerClosing AndAlso e.CloseReason <> CloseReason.ApplicationExitCall Then
+                e.Cancel = True
+                Hide()
+            End If
+        End Sub
+
+        Private Sub frmKeyboard_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+            PerformStartupInit("Load")
+            If Not _startHidden Then
+                ClampOskOnScreen("Load")
+                Show()
+            End If
+        End Sub
+
+        ''' <summary>Keep the keyboard on the working area — bad saved Location made it look like it "didn't open".</summary>
+        Private Sub ClampOskOnScreen(reason As String)
+            Try
+                Dim scr As Screen = Screen.FromPoint(New Point(Left + Width \ 2, Top + Height \ 2))
+                If Not scr.Bounds.Contains(New Point(Left + 8, Top + 8)) Then
+                    scr = Screen.FromPoint(Cursor.Position)
+                End If
+                Dim wa As Rectangle = scr.WorkingArea
+                Dim w As Integer = Math.Max(200, Math.Min(Width, wa.Width - 8))
+                Dim h As Integer = Math.Max(110, Math.Min(Height, wa.Height - 8))
+                Dim x As Integer = Left
+                Dim y As Integer = Top
+                If x + w > wa.Right Then x = wa.Right - w
+                If y + h > wa.Bottom Then y = wa.Bottom - h
+                If x < wa.Left Then x = wa.Left + 4
+                If y < wa.Top Then y = wa.Top + 4
+                If x <> Left OrElse y <> Top OrElse w <> Width OrElse h <> Height Then
+                    WriteScaleLog(reason & " clamp-on-screen " & Left.ToString() & "," & Top.ToString() &
+                                  " " & Width.ToString() & "x" & Height.ToString() & " -> " &
+                                  x.ToString() & "," & y.ToString() & " " & w.ToString() & "x" & h.ToString())
+                    Left = x
+                    Top = y
+                    If w <> Width OrElse h <> Height Then
+                        ForceOskWindowSize(w, h, reason & "-onscreen-size")
+                    End If
+                End If
+            Catch ex As Exception
+                WriteScaleLog(reason & " clamp EX " & ex.Message)
+            End Try
+        End Sub
+
+        ''' <summary>
+        ''' Capture design key layouts, apply screen size budget, scale keys into that window.
+        ''' Safe to call multiple times; only the first call does the work.
+        ''' </summary>
+        Private Sub PerformStartupInit(reason As String)
+            If _startupInitDone Then
+                WriteScaleLog(reason & " init-skip alreadyDone build=" & OskBuildId)
+                Return
+            End If
+            _startupInitDone = True
+            Try
+                Dim exePath As String = ""
+                Try
+                    exePath = Process.GetCurrentProcess().MainModule.FileName
+                Catch
+                    exePath = Application.ExecutablePath
+                End Try
+                WriteScaleLog(reason & " enter pid=" & Process.GetCurrentProcess().Id.ToString() &
+                              " exe=" & exePath & " build=" & OskBuildId)
+
+                AutoScaleMode = AutoScaleMode.None
+                capturedSplitterDistance = DesignSplitDist
+                oWidth = DesignSplitDist
+                oHeight = DesignSplitHeight
+                o2Width = DesignSplitWidth - DesignSplitDist - 4
+                o2Height = DesignSplitHeight
+                ApplyNoActivateStyle()
+                CaptureDesignButtonLayouts()
+
+                Dim screenObj As Screen = Screen.FromPoint(New Point(Me.Left, Me.Top))
+                ApplyScreenBasedSizeBudget(screenObj, reason & "-budget")
+                Try
+                    DeleteSetting("x32_OSK", "Settings", "Size")
+                Catch
+                End Try
+
+                SplitContainer1.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+                ForceOskWindowSize(_oskTargetSize.Width, _oskTargetSize.Height, reason & "-set")
+
+                Dim screenW As Integer = screenObj.Bounds.Width
+                Dim locRaw As String = GetSetting("x32_OSK", "Settings", "Location",
+                    CStr(screenObj.Bounds.Left + (screenW - Me.Width) \ 2) & ", " & CStr(screenObj.WorkingArea.Bottom - Me.Height))
+                Dim locParts() As String = locRaw.Split(","c)
+                Dim newLeft As Integer = screenObj.Bounds.Left + (screenW - Me.Width) \ 2
+                Dim newTop As Integer = screenObj.WorkingArea.Bottom - Me.Height
+                If locParts.Length >= 2 Then
+                    Integer.TryParse(locParts(0).Trim(), newLeft)
+                    Integer.TryParse(locParts(1).Trim(), newTop)
+                End If
+                Me.Left = newLeft
+                Me.Top = newTop
+                ClampOskOnScreen(reason)
+
+                isInit = True
+                ApplyOskTitleStamp()
+                _snapEnabled = String.Equals(GetSetting("x32_OSK", "Settings", "SnapEnabled", "1"), "1", StringComparison.Ordinal)
+                ApplyKeyboardScale(reason)
+                LayoutTopChrome()
+                ForceOskWindowSize(_oskTargetSize.Width, _oskTargetSize.Height, reason & "-after-scale")
+                EnsureCloseKeyChrome()
+                PositionCloseButton()
+                SaveSetting("x32_OSK", "Settings", "SizeSchema", CurrentSizeSchema)
+                Try
+                    My.Settings.Save()
+                Catch
+                End Try
+                Try
+                    UserButtons.Hide()
+                Catch
+                End Try
+                sbFn.Clickable = False
+                sbFn.Color = LCARScolorStyles.FunctionUnavailable
+                Try
+                    loadFNbuttons()
+                Catch exFn As Exception
+                    WriteScaleLog(reason & " loadFNbuttons EX " & exFn.Message)
+                End Try
+                UpdateElevateButtonState()
+                If GetKeyState(144L) = 1 Then
+                    btnnumlock.Color = LCARScolorStyles.PrimaryFunction
+                Else
+                    btnnumlock.Color = LCARScolorStyles.SystemFunction
+                End If
+                If GetKeyState(145L) = 1 Then
+                    btnScrollLock.Color = LCARScolorStyles.PrimaryFunction
+                Else
+                    btnScrollLock.Color = LCARScolorStyles.SystemFunction
+                End If
+                If My.Settings.Mode Then
+                    Try
+                        sbNum_Click(Me, EventArgs.Empty)
+                    Catch
+                    End Try
+                End If
+                ForceOskWindowSize(_oskTargetSize.Width, _oskTargetSize.Height, reason & "-final")
+                Try
+                    Dim stampDir As String = IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LCARS x32")
+                    If Not IO.Directory.Exists(stampDir) Then IO.Directory.CreateDirectory(stampDir)
+                    IO.File.WriteAllText(IO.Path.Combine(stampDir, "osk-running-build.txt"), OskBuildId & " " & exePath)
+                Catch
+                End Try
+                WriteScaleLog(reason & " exit ok size=" & Me.Width.ToString() & "x" & Me.Height.ToString() &
+                              " build=" & OskBuildId & " keys=" & buttons.Count.ToString())
+            Catch ex As Exception
+                WriteScaleLog(reason & " EX " & ex.ToString())
+                _startupInitDone = False
+            End Try
+        End Sub
+
+        Private Sub CaptureDesignButtonLayouts()
+            buttons.Clear()
+            contentW1 = 1
+            contentH1 = 1
+            contentW2 = 1
+            contentH2 = 1
+            For Each myButton As Control In SplitContainer1.Panel1.Controls
+                Dim item As New ButtonLayout()
+                item.Left = myButton.Left
+                item.Top = myButton.Top
+                item.Width = myButton.Width
+                item.Height = myButton.Height
+                item.Control = myButton
+                item.InPanel2 = False
+                buttons.Add(item)
+                contentW1 = Math.Max(contentW1, item.Left + item.Width)
+                contentH1 = Math.Max(contentH1, item.Top + item.Height)
+            Next
+            For Each myButton As Control In SplitContainer1.Panel2.Controls
+                Dim item As New ButtonLayout()
+                item.Left = myButton.Left
+                item.Top = myButton.Top
+                item.Width = myButton.Width
+                item.Height = myButton.Height
+                item.Control = myButton
+                item.InPanel2 = True
+                buttons.Add(item)
+                contentW2 = Math.Max(contentW2, item.Left + item.Width)
+                contentH2 = Math.Max(contentH2, item.Top + item.Height)
+            Next
+            WriteScaleLog("capture content1=" & contentW1.ToString() & "x" & contentH1.ToString() &
+                          " content2=" & contentW2.ToString() & "x" & contentH2.ToString() &
+                          " buttons=" & buttons.Count.ToString())
+        End Sub
+
+        ''' <summary>Fit MOVE KEYPAD / SNAP / SIZE chrome into the compact client (design coords are 1350-wide).</summary>
+        Private Sub LayoutTopChrome()
+            Try
+                Dim barH As Integer = Math.Max(18, Math.Min(28, Math.Max(18, ClientSize.Height \ 7)))
+                Dim snapW As Integer = Math.Max(52, Math.Min(72, ClientSize.Width \ 6))
+                Dim sizeW As Integer = Math.Max(48, Math.Min(90, ClientSize.Width \ 6))
+                Dim numW As Integer = Math.Max(36, Math.Min(48, ClientSize.Width \ 10))
+                Dim gap As Integer = 4
+                Dim right As Integer = ClientSize.Width - 4
+                If StandardButton1 IsNot Nothing Then
+                    StandardButton1.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+                    StandardButton1.SetBounds(right - snapW, 3, snapW, barH)
+                    right = StandardButton1.Left - gap
+                End If
+                If sbChangeSize IsNot Nothing Then
+                    sbChangeSize.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+                    sbChangeSize.SetBounds(right - sizeW, 3, sizeW, barH)
+                    right = sbChangeSize.Left - gap
+                End If
+                If sbNum IsNot Nothing Then
+                    sbNum.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+                    sbNum.SetBounds(right - numW, 3, numW, barH)
+                    right = sbNum.Left - gap
+                End If
+                If sbTitle IsNot Nothing Then
+                    sbTitle.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+                    Dim titleW As Integer = Math.Max(80, right - 7)
+                    sbTitle.SetBounds(7, 3, titleW, barH)
+                End If
+            Catch ex As Exception
+                WriteScaleLog("LayoutTopChrome EX " & ex.Message)
+            End Try
+        End Sub
+
+
+
+
+    Private Sub WriteScaleLog(line As String)
+        Try
+            Dim dir As String = IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LCARS x32")
+            If Not IO.Directory.Exists(dir) Then IO.Directory.CreateDirectory(dir)
+            IO.File.AppendAllText(IO.Path.Combine(dir, "osk-scale.log"), DateTime.Now.ToString("s") & " " & line & Environment.NewLine)
+        Catch
+        End Try
+        Try
+            IO.File.AppendAllText(IO.Path.Combine(IO.Path.GetTempPath(), "lcars-osk-scale.log"), DateTime.Now.ToString("s") & " " & line & Environment.NewLine)
+        Catch
+        End Try
+    End Sub
+
+    Private Sub ApplyScreenBasedSizeBudget(screenObj As Screen, reason As String)
+        Dim wa As Rectangle = screenObj.WorkingArea
+        ' Compact but usable: ~48% × ~26% of working area (never the design 1350×542 / ~2/3 screen).
+        Dim maxW As Integer = Math.Max(320, Math.Min(CInt(wa.Width * 0.48R), 700))
+        Dim maxH As Integer = Math.Max(150, Math.Min(CInt(wa.Height * 0.26R), 240))
+        maxW = Math.Min(maxW, wa.Width \ 2)
+        maxH = Math.Min(maxH, wa.Height \ 3)
+        _oskMaxSize = New Size(maxW, maxH)
+        Dim defW As Integer = Math.Max(300, CInt(maxW * 0.95R))
+        Dim defH As Integer = Math.Max(150, CInt(maxH * 0.95R))
+        defW = Math.Min(defW, maxW)
+        defH = Math.Min(defH, maxH)
+        _oskTargetSize = New Size(defW, defH)
+        Me.MaximumSize = _oskMaxSize
+        Me.MinimumSize = New Size(200, 110)
+        WriteScaleLog(reason & " wa=" & wa.Width.ToString() & "x" & wa.Height.ToString() &
+                      " max=" & _oskMaxSize.ToString() & " target=" & _oskTargetSize.ToString() &
+                      " build=" & OskBuildId)
+    End Sub
+
+    Private Sub ForceOskWindowSize(w As Integer, h As Integer, reason As String)
+        If _oskMaxSize.Width > 0 Then
+            w = Math.Min(w, _oskMaxSize.Width)
+            h = Math.Min(h, _oskMaxSize.Height)
+        End If
+        w = Math.Max(200, w)
+        h = Math.Max(110, h)
+        Dim before As String = Me.Width.ToString() & "x" & Me.Height.ToString()
+        Me.MaximumSize = If(_oskMaxSize.Width > 0, _oskMaxSize, New Size(w, h))
+        Me.MinimumSize = New Size(200, 110)
+        Me.Size = New Size(w, h)
+        Me.ClientSize = New Size(w, h) ' borderless — keep client and outer in sync
+        Try
+            If IsHandleCreated Then
+                SetWindowPos(Me.Handle, IntPtr.Zero, Me.Left, Me.Top, w, h,
+                             SWP_NOZORDER Or SWP_NOACTIVATE)
             End If
         Catch
-            SendKeys.Send(sender.buttontext)
         End Try
-
-
-        ' If ALT = True Then
-        'Alt_Click(sender, e)
-        'End If
-
-        If CTRL = True Then
-            Ctrl_Click(sender, e)
-        End If
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-        'If WIN = True Then
-        'sbLWin_Click(sender, e)
-        'End If
+        _oskTargetSize = New Size(w, h)
+        WriteScaleLog(reason & " size " & before & " -> " & Me.Width.ToString() & "x" & Me.Height.ToString() &
+                      " (want " & w.ToString() & "x" & h.ToString() & ") build=" & OskBuildId)
     End Sub
 
-    Private Sub Shift_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbLShift.Click, sbRShift.Click
-        SHIFT = Not SHIFT
+    Private Sub ForceCompactWindowSize(reason As String)
+        Dim screenObj As System.Windows.Forms.Screen = System.Windows.Forms.Screen.FromControl(Me)
+        If _oskMaxSize.IsEmpty OrElse _oskTargetSize.IsEmpty Then
+            ApplyScreenBasedSizeBudget(screenObj, reason & "-budget")
+        End If
+        If Me.Width > _oskMaxSize.Width OrElse Me.Height > _oskMaxSize.Height OrElse
+           Me.Width < 200 OrElse Me.Height < 110 OrElse
+           Math.Abs(Me.Width - _oskTargetSize.Width) > 2 OrElse Math.Abs(Me.Height - _oskTargetSize.Height) > 2 Then
+            ForceOskWindowSize(_oskTargetSize.Width, _oskTargetSize.Height, reason & " force-compact")
+        End If
+    End Sub
 
-        If SHIFT = True Then
-            If CAPS = False Then
-                For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel1.Controls
-                    myButton.ButtonText = myButton.Data2
-                Next
-            Else
-                For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel1.Controls
-                    If Not (myButton.ButtonText.Length = 1 And Char.IsLetter(myButton.ButtonText)) Then
-                        myButton.ButtonText = myButton.Data2
-                    End If
-                Next
+    Private Sub frmKeyboard_Shown(sender As Object, e As EventArgs) Handles Me.Shown
+        Try
+            PerformStartupInit("shown")
+            Try
+                Opacity = 1.0R
+            Catch
+            End Try
+            ClampOskOnScreen("shown")
+            If _oskTargetSize.Width > 0 Then
+                ForceOskWindowSize(_oskTargetSize.Width, _oskTargetSize.Height, "shown")
             End If
+            LayoutTopChrome()
+        Catch ex As Exception
+            WriteScaleLog("shown EX " & ex.Message)
+        End Try
+    End Sub
 
+    ''' <summary>SNAP toggle on the top chrome (Close lives on the keypad as StandardButton2).</summary>
+    Private Sub PositionCloseButton()
+        UpdateSnapButtonChrome()
+    End Sub
 
+    Private Sub UpdateSnapButtonChrome()
+        If StandardButton1 Is Nothing OrElse StandardButton1.IsDisposed Then Return
+        StandardButton1.Visible = True
+        StandardButton1.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        StandardButton1.ButtonStyle = StandardButton.LCARSbuttonStyles.RoundedSquare
+        StandardButton1.ButtonTextAlign = ContentAlignment.MiddleCenter
+        Dim onText As String = If(_snapEnabled, "SNAP ON", "SNAP OFF")
+        StandardButton1.ButtonText = onText
+        StandardButton1.Text = onText
+        StandardButton1.Color = If(_snapEnabled, LCARScolorStyles.PrimaryFunction, LCARScolorStyles.FunctionUnavailable)
+        StandardButton1.BringToFront()
+    End Sub
 
-            sbLShift.Color = LCARS.LCARScolorStyles.PrimaryFunction
-            sbRShift.Color = LCARS.LCARScolorStyles.PrimaryFunction
+    Private Sub EnsureCloseKeyChrome()
+        If StandardButton2 Is Nothing OrElse StandardButton2.IsDisposed Then Return
+        StandardButton2.ButtonText = "CLOSE"
+        StandardButton2.Text = "CLOSE"
+        StandardButton2.Data = "CLOSE"
+        StandardButton2.Data2 = "CLOSE"
+        StandardButton2.Color = LCARScolorStyles.MiscFunction
+        StandardButton2.ButtonStyle = StandardButton.LCARSbuttonStyles.RoundedSquare
+        StandardButton2.ButtonTextAlign = ContentAlignment.MiddleCenter
+    End Sub
 
-        Else
-            If CAPS = False Then
-                For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel1.Controls
-                    myButton.ButtonText = myButton.Data
-                Next
-            Else
-                For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel1.Controls
-                    If Not (myButton.ButtonText.Length = 1 And Char.IsLetter(myButton.ButtonText)) Then
-                        myButton.ButtonText = myButton.Data
-                    End If
-                Next
+    Private Function BuildSnapCandidates() As List(Of Point)
+        Dim scr As Screen = Screen.FromControl(Me)
+        Dim wa As Rectangle = scr.WorkingArea
+        Dim margin As Integer = 6
+        Dim maxX As Integer = Math.Max(wa.Left + margin, wa.Right - Width - margin)
+        Dim maxY As Integer = Math.Max(wa.Top + margin, wa.Bottom - Height - margin)
+        Dim spanX As Integer = Math.Max(0, maxX - (wa.Left + margin))
+        Dim spanY As Integer = Math.Max(0, maxY - (wa.Top + margin))
+        Dim candidates As New List(Of Point)
+        For i As Integer = 0 To 4
+            Dim x As Integer = wa.Left + margin + CInt(spanX * (i / 4.0))
+            candidates.Add(New Point(x, maxY))
+            candidates.Add(New Point(x, wa.Top + margin))
+        Next
+        For i As Integer = 0 To 4
+            Dim y As Integer = wa.Top + margin + CInt(spanY * (i / 4.0))
+            candidates.Add(New Point(wa.Left + margin, y))
+            candidates.Add(New Point(maxX, y))
+        Next
+        Return candidates
+    End Function
+
+    Private Function GetNearestSnapPoint() As Point
+        Dim candidates As List(Of Point) = BuildSnapCandidates()
+        Dim best As Point = candidates(0)
+        Dim bestDist As Double = Double.MaxValue
+        Dim cur As New Point(Left, Top)
+        For Each p As Point In candidates
+            Dim dx As Double = p.X - cur.X
+            Dim dy As Double = p.Y - cur.Y
+            Dim d As Double = dx * dx + dy * dy
+            If d < bestDist Then
+                bestDist = d
+                best = p
             End If
+        Next
+        Return best
+    End Function
 
-            sbLShift.Color = LCARS.LCARScolorStyles.SystemFunction
-            sbRShift.Color = LCARS.LCARScolorStyles.SystemFunction
+    ''' <summary>Snap OSK to nearest screen slot when SNAP is on.</summary>
+    Private Sub SnapOskIfEnabled()
+        If Not _snapEnabled OrElse _snapBusy OrElse Not isInit Then Return
+        _snapBusy = True
+        Try
+            Dim best As Point = GetNearestSnapPoint()
+            If Left <> best.X OrElse Top <> best.Y Then
+                Left = best.X
+                Top = best.Y
+            End If
+            SaveSetting("x32_OSK", "Settings", "Location", Left.ToString() & ", " & Top.ToString())
+        Finally
+            _snapBusy = False
+        End Try
+    End Sub
 
+    ' Scale keys from design layouts into the current client budget, then size the
+    ' SplitContainer to the scaled keys. Do NOT resize SplitContainer before computing
+    ' scale — design SplitterDistance (1048) blocks SetBounds on a compact window, which
+    ' left Panel.ClientSize at design size and s≈1 (keys unscaled, window clipped).
+    Private Sub ApplyKeyboardScale(reason As String)
+        If _scaleBusy Then
+            WriteScaleLog(reason & " BUSY-skip")
+            Return
+        End If
+        If buttons Is Nothing OrElse buttons.Count = 0 Then
+            WriteScaleLog(reason & " EMPTY buttons — cannot scale without design capture")
+            Return
         End If
 
+        _scaleBusy = True
+        Try
+            SplitContainer1.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+            SplitContainer1.IsSplitterFixed = True
+            SplitContainer1.Panel1.AutoScroll = False
+            SplitContainer1.Panel2.AutoScroll = False
+            SplitContainer1.Panel1MinSize = 1
+            SplitContainer1.Panel2MinSize = 1
 
+            Dim topPad As Integer = Math.Min(DesignSplitTop, Math.Max(36, ClientSize.Height \ 7))
+            Const leftPad As Integer = 7
+            Const rightPad As Integer = 4
+            Const bottomPad As Integer = 4
+            Dim targetW As Integer = Math.Max(100, ClientSize.Width - leftPad - rightPad)
+            Dim targetH As Integer = Math.Max(50, ClientSize.Height - topPad - bottomPad)
 
+            ' Scale from design content vs target split — independent of live Panel sizes.
+            Dim splitFx As Double = targetW / CDbl(DesignSplitWidth)
+            Dim splitFy As Double = targetH / CDbl(DesignSplitHeight)
+            Dim panel1DesignW As Double = DesignSplitDist
+            Dim panel2DesignW As Double = Math.Max(1, DesignSplitWidth - DesignSplitDist - 4)
+            Dim availW1 As Double = Math.Max(1.0R, panel1DesignW * splitFx)
+            Dim availW2 As Double = Math.Max(1.0R, panel2DesignW * splitFx)
+            Dim availH As Double = Math.Max(1.0R, DesignSplitHeight * splitFy)
 
+            Dim sx1 As Double = availW1 / CDbl(Math.Max(1, contentW1))
+            Dim sy1 As Double = availH / CDbl(Math.Max(1, contentH1))
+            Dim sx2 As Double = availW2 / CDbl(Math.Max(1, contentW2))
+            Dim sy2 As Double = availH / CDbl(Math.Max(1, contentH2))
+            Dim s1 As Double = Math.Min(sx1, sy1)
+            Dim s2 As Double = Math.Min(sx2, sy2)
+            If s1 < 0.05 Then s1 = 0.05
+            If s2 < 0.05 Then s2 = 0.05
+            sx1 = s1
+            sy1 = s1
+            sx2 = s2
+            sy2 = s2
 
+            Dim sample As Control = buttons(0).Control
+            Dim sampleBefore As String = If(sample Is Nothing, "null", sample.Name & sample.Bounds.ToString())
 
-        'code for the buttons on the number pad.
+            SplitContainer1.Visible = False
+            Dim changed As Integer = 0
+            Dim maxR1 As Integer = 0
+            Dim maxB1 As Integer = 0
+            Dim maxR2 As Integer = 0
+            Dim maxB2 As Integer = 0
+            For Each btn As ButtonLayout In buttons
+                If btn.Control Is Nothing OrElse btn.Control.IsDisposed Then Continue For
+                Dim sx As Double = If(btn.InPanel2, sx2, sx1)
+                Dim sy As Double = If(btn.InPanel2, sy2, sy1)
+                Dim nl As Integer = CInt(Math.Floor(btn.Left * sx))
+                Dim nt As Integer = CInt(Math.Floor(btn.Top * sy))
+                Dim nw As Integer = Math.Max(4, CInt(Math.Floor(btn.Width * sx)))
+                Dim nh As Integer = Math.Max(4, CInt(Math.Floor(btn.Height * sy)))
+                Dim maxRight As Integer = CInt(Math.Floor((btn.Left + btn.Width) * sx))
+                Dim maxBottom As Integer = CInt(Math.Floor((btn.Top + btn.Height) * sy))
+                If nl + nw > maxRight Then nw = Math.Max(4, maxRight - nl)
+                If nt + nh > maxBottom Then nh = Math.Max(4, maxBottom - nt)
 
-        If SHIFT = True Then
+                If btn.Control.Left <> nl OrElse btn.Control.Top <> nt OrElse btn.Control.Width <> nw OrElse btn.Control.Height <> nh Then
+                    btn.Control.SetBounds(nl, nt, nw, nh)
+                    changed += 1
+                End If
 
-            If btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-                For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel2.Controls
-                    myButton.ButtonText = myButton.Data2
-                Next
-            Else
-                For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel2.Controls
-                    If Not (myButton.ButtonText.Length = 1 And Char.IsLetter(myButton.ButtonText)) Then
-                        myButton.ButtonText = myButton.Data
-                    End If
-                Next
-
-            End If
-
-
-            sbLShift.Color = LCARS.LCARScolorStyles.PrimaryFunction
-            sbRShift.Color = LCARS.LCARScolorStyles.PrimaryFunction
-
-        Else
-            If SHIFT = False Then
-                If btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-                    For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel2.Controls
-                        myButton.ButtonText = myButton.Data
-                    Next
+                If btn.InPanel2 Then
+                    maxR2 = Math.Max(maxR2, nl + nw)
+                    maxB2 = Math.Max(maxB2, nt + nh)
                 Else
-                    For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel2.Controls
-                        If Not (myButton.ButtonText.Length = 1 And Char.IsLetter(myButton.ButtonText)) Then
-                            myButton.ButtonText = myButton.Data
+                    maxR1 = Math.Max(maxR1, nl + nw)
+                    maxB1 = Math.Max(maxB1, nt + nh)
+                End If
+            Next
+
+            ' Fit split to scaled keys (never larger than target budget).
+            Dim fitPanel1W As Integer = Math.Max(1, maxR1)
+            Dim fitPanel2W As Integer = Math.Max(1, maxR2)
+            Dim fitSplitW As Integer = Math.Min(targetW, fitPanel1W + SplitContainer1.SplitterWidth + fitPanel2W)
+            Dim fitSplitH As Integer = Math.Min(targetH, Math.Max(1, Math.Max(maxB1, maxB2)))
+            Dim newDist As Integer = fitPanel1W
+            Dim maxDist As Integer = Math.Max(1, fitSplitW - SplitContainer1.SplitterWidth - 1)
+            If newDist < 1 Then newDist = 1
+            If newDist > maxDist Then newDist = maxDist
+
+            ' Drop design SplitterDistance before shrink so WinForms accepts the compact size.
+            Try
+                SplitContainer1.SplitterDistance = Math.Min(newDist, Math.Max(1, SplitContainer1.Width \ 2))
+            Catch
+            End Try
+            SplitContainer1.SetBounds(leftPad, topPad, fitSplitW, fitSplitH)
+            Try
+                Dim hugMax As Integer = SplitContainer1.Width - SplitContainer1.SplitterWidth - Math.Max(1, SplitContainer1.Panel2MinSize)
+                If hugMax < 1 Then hugMax = 1
+                If newDist > hugMax Then newDist = hugMax
+                SplitContainer1.SplitterDistance = newDist
+            Catch exDist As Exception
+                WriteScaleLog(reason & " splitterERR " & exDist.Message)
+            End Try
+
+            ' Keep the window at the screen budget — do not hug-grow or hug-shrink the form.
+            If _oskTargetSize.Width > 0 Then
+                ForceOskWindowSize(_oskTargetSize.Width, _oskTargetSize.Height, reason & "-clamp")
+            End If
+
+            SplitContainer1.Visible = True
+
+            For Each btn As ButtonLayout In buttons
+                If btn.Control Is Nothing OrElse btn.Control.IsDisposed Then Continue For
+                Try
+                    Dim lcarsBtn As LCARS.LCARSbuttonClass = TryCast(btn.Control, LCARS.LCARSbuttonClass)
+                    If lcarsBtn IsNot Nothing Then
+                        lcarsBtn.ForceRedraw()
+                    Else
+                        btn.Control.Invalidate()
+                    End If
+                Catch
+                    btn.Control.Invalidate()
+                End Try
+            Next
+
+            Dim sampleAfter As String = If(sample Is Nothing, "null", sample.Name & sample.Bounds.ToString())
+            WriteScaleLog(reason & " build=" & OskBuildId &
+                          " n=" & buttons.Count.ToString() & " changed=" & changed.ToString() &
+                          " form=" & Width.ToString() & "x" & Height.ToString() &
+                          " client=" & ClientSize.Width.ToString() & "x" & ClientSize.Height.ToString() &
+                          " targetSplit=" & targetW.ToString() & "x" & targetH.ToString() &
+                          " fitSplit=" & fitSplitW.ToString() & "x" & fitSplitH.ToString() &
+                          " p1=" & SplitContainer1.Panel1.ClientSize.Width.ToString() & "x" & SplitContainer1.Panel1.ClientSize.Height.ToString() &
+                          " p2=" & SplitContainer1.Panel2.ClientSize.Width.ToString() & "x" & SplitContainer1.Panel2.ClientSize.Height.ToString() &
+                          " fit1=" & maxR1.ToString() & "x" & maxB1.ToString() &
+                          " fit2=" & maxR2.ToString() & "x" & maxB2.ToString() &
+                          " s1=" & s1.ToString("0.###") & " s2=" & s2.ToString("0.###") &
+                          " before=" & sampleBefore & " after=" & sampleAfter)
+
+            SplitContainer1.Refresh()
+            Me.Invalidate(True)
+            Me.Update()
+            LayoutTopChrome()
+            PositionCloseButton()
+        Catch ex As Exception
+            WriteScaleLog(reason & " EX " & ex.GetType().Name & " " & ex.Message)
+            Try
+                SplitContainer1.Visible = True
+            Catch
+            End Try
+        Finally
+            _scaleBusy = False
+        End Try
+    End Sub
+
+    Private Sub RecaptureButtonLayouts()
+        buttons.Clear()
+        contentW1 = 1
+        contentH1 = 1
+        contentW2 = 1
+        contentH2 = 1
+        For Each myButton As Control In SplitContainer1.Panel1.Controls
+            Dim item As New ButtonLayout()
+            item.Left = myButton.Left
+            item.Top = myButton.Top
+            item.Width = myButton.Width
+            item.Height = myButton.Height
+            item.Control = myButton
+            item.InPanel2 = False
+            buttons.Add(item)
+            contentW1 = Math.Max(contentW1, item.Left + item.Width)
+            contentH1 = Math.Max(contentH1, item.Top + item.Height)
+        Next
+        For Each myButton As Control In SplitContainer1.Panel2.Controls
+            Dim item As New ButtonLayout()
+            item.Left = myButton.Left
+            item.Top = myButton.Top
+            item.Width = myButton.Width
+            item.Height = myButton.Height
+            item.Control = myButton
+            item.InPanel2 = True
+            buttons.Add(item)
+            contentW2 = Math.Max(contentW2, item.Left + item.Width)
+            contentH2 = Math.Max(contentH2, item.Top + item.Height)
+        Next
+        WriteScaleLog("recapture content1=" & contentW1.ToString() & "x" & contentH1.ToString() &
+                      " content2=" & contentW2.ToString() & "x" & contentH2.ToString())
+    End Sub
+
+    Private Sub LayoutKeyboardSurface()
+        ApplyKeyboardScale("layout")
+    End Sub
+
+    Private Sub ScaleKeyboardButtons()
+        ApplyKeyboardScale("scale")
+    End Sub
+
+        Public Sub loadFNbuttons()
+            If Operators.CompareString(My.Settings.FN1Name, "", TextCompare:=False) = 0 Then
+                sbFn1.ButtonText = "FN1"
+            ElseIf Operators.CompareString(My.Settings.FN1Name, "", TextCompare:=False) <> 0 Then
+                sbFn1.ButtonText = My.Settings.FN1Name
+            End If
+            If Operators.CompareString(My.Settings.FN2Name, "", TextCompare:=False) = 0 Then
+                sbFn2.ButtonText = "FN2"
+            ElseIf Operators.CompareString(My.Settings.FN2Name, "", TextCompare:=False) <> 0 Then
+                sbFn2.ButtonText = My.Settings.FN2Name
+            End If
+            If Operators.CompareString(My.Settings.FN3Name, "", TextCompare:=False) = 0 Then
+                sbFN3.ButtonText = "FN3"
+            ElseIf Operators.CompareString(My.Settings.FN3Name, "", TextCompare:=False) <> 0 Then
+                sbFN3.ButtonText = My.Settings.FN3Name
+            End If
+            If Operators.CompareString(My.Settings.FN4Name, "", TextCompare:=False) = 0 Then
+                sbFn4.ButtonText = "FN4"
+            ElseIf Operators.CompareString(My.Settings.FN4Name, "", TextCompare:=False) <> 0 Then
+                sbFn4.ButtonText = My.Settings.FN4Name
+            End If
+            If Operators.CompareString(My.Settings.FN5Name, "", TextCompare:=False) = 0 Then
+                sbFn5.ButtonText = "FN5"
+            ElseIf Operators.CompareString(My.Settings.FN5Name, "", TextCompare:=False) <> 0 Then
+                sbFn5.ButtonText = My.Settings.FN5Name
+            End If
+            If Operators.CompareString(My.Settings.FN6Name, "", TextCompare:=False) = 0 Then
+                sbFn6.ButtonText = "FN6"
+            ElseIf Operators.CompareString(My.Settings.FN6Name, "", TextCompare:=False) <> 0 Then
+                sbFn6.ButtonText = My.Settings.FN6Name
+            End If
+            If Operators.CompareString(My.Settings.FN7Name, "", TextCompare:=False) = 0 Then
+                sbFn7.ButtonText = "FN7"
+            ElseIf Operators.CompareString(My.Settings.FN7Name, "", TextCompare:=False) <> 0 Then
+                sbFn7.ButtonText = My.Settings.FN7Name
+            End If
+            If Operators.CompareString(My.Settings.FN8Name, "", TextCompare:=False) = 0 Then
+                sbFn8.ButtonText = "FN8"
+            ElseIf Operators.CompareString(My.Settings.FN8Name, "", TextCompare:=False) <> 0 Then
+                sbFn8.ButtonText = My.Settings.FN8Name
+            End If
+            If Operators.CompareString(My.Settings.FN9Name, "", TextCompare:=False) = 0 Then
+                sbFn9.ButtonText = "FN9"
+            ElseIf Operators.CompareString(My.Settings.FN9Name, "", TextCompare:=False) <> 0 Then
+                sbFn9.ButtonText = My.Settings.FN9Name
+            End If
+            If Operators.CompareString(My.Settings.FN10Name, "", TextCompare:=False) = 0 Then
+                sbFn10.ButtonText = "FN10"
+            ElseIf Operators.CompareString(My.Settings.FN10Name, "", TextCompare:=False) <> 0 Then
+                sbFn10.ButtonText = My.Settings.FN10Name
+            End If
+            If Operators.CompareString(My.Settings.FN11Name, "", TextCompare:=False) = 0 Then
+                sbFn11.ButtonText = "FN11"
+            ElseIf Operators.CompareString(My.Settings.FN11Name, "", TextCompare:=False) <> 0 Then
+                sbFn11.ButtonText = My.Settings.FN11Name
+            End If
+            If Operators.CompareString(My.Settings.FN12Name, "", TextCompare:=False) = 0 Then
+                sbFn12.ButtonText = "FN12"
+            ElseIf Operators.CompareString(My.Settings.FN12Name, "", TextCompare:=False) <> 0 Then
+                sbFn12.ButtonText = My.Settings.FN12Name
+            End If
+        End Sub
+
+        Public Sub frmKeyboard_ResizeEnd(sender As Object, e As EventArgs) Handles Me.ResizeEnd
+            ' User resized — raise budget if needed so their choice sticks this session,
+            ' but never allow more than half the working area.
+            Dim scr As Screen = Screen.FromControl(Me)
+            Dim wa As Rectangle = scr.WorkingArea
+            Dim absMaxW As Integer = Math.Max(280, wa.Width \ 2)
+            Dim absMaxH As Integer = Math.Max(130, wa.Height \ 3)
+            If Width > absMaxW OrElse Height > absMaxH Then
+                ForceOskWindowSize(Math.Min(Width, absMaxW), Math.Min(Height, absMaxH), "resize-end-cap")
+            End If
+            _oskTargetSize = Me.Size
+            If _oskMaxSize.Width < Width OrElse _oskMaxSize.Height < Height Then
+                _oskMaxSize = New Size(Math.Max(_oskMaxSize.Width, Width), Math.Max(_oskMaxSize.Height, Height))
+                _oskMaxSize = New Size(Math.Min(_oskMaxSize.Width, absMaxW), Math.Min(_oskMaxSize.Height, absMaxH))
+                Me.MaximumSize = _oskMaxSize
+            End If
+            ApplyKeyboardScale("resize-end")
+            ForceOskWindowSize(_oskTargetSize.Width, _oskTargetSize.Height, "resize-end-final")
+            SaveSetting("x32_OSK", "Settings", "Size", Conversions.ToString(Width) & ", " & Conversions.ToString(Height))
+            My.Settings.Save()
+        End Sub
+
+        Private Sub StandardKey_Click(sender As Object, e As EventArgs) Handles sb1.Click, sb2.Click, sb3.Click, sb4.Click, sb5.Click, sb6.Click, sb7.Click, sb8.Click, sb9.Click, sb0.Click, sbSpace.Click, sbTilde.Click, sbMinus.Click, sbEqual.Click, sbBackSlash.Click, sbForwardSlash.Click, sbLBracket.Click, sbRBracket.Click, sbSemiColon.Click, sbQuote.Click, sbComma.Click, sbPeriod.Click, sbBack.Click, sbEnter.Click, sbESC.Click, sbF1.Click, sbF2.Click, sbF3.Click, sbF4.Click, sbF5.Click, sbF6.Click, sbF7.Click, sbF8.Click, sbF9.Click, sbF10.Click, sbF11.Click, sbF12.Click, sbDEL.Click, sbREnter.Click
+            Dim text = ""
+            Dim text2 = ""
+            Try
+                text2 = Conversions.ToString(NewLateBinding.LateGet(sender, Nothing, "buttontext", New Object(-1) {}, Nothing, Nothing, Nothing))
+            Catch projectError As Exception
+                ProjectData.SetProjectError(projectError)
+                text2 = ""
+                Call ProjectData.ClearProjectError()
+            End Try
+            If String.IsNullOrEmpty(text2) Then
+                Try
+                    text2 = Conversions.ToString(NewLateBinding.LateGet(sender, Nothing, "ButtonText", New Object(-1) {}, Nothing, Nothing, Nothing))
+                Catch projectError2 As Exception
+                    ProjectData.SetProjectError(projectError2)
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+            Dim num = ResolveNavigationVk(text2)
+            If num > 0 AndAlso Not CTRL AndAlso Not ALT AndAlso Not SHIFT Then
+                OskSendVirtualKey(num)
+                Return
+            End If
+            If CTRL Then
+                text += "^"
+            End If
+            If ALT Then
+                text += "%"
+            End If
+            If SHIFT Then
+                text += "+"
+            End If
+            Try
+                Dim text3 = ResolveSendKeysToken(text2)
+                If Operators.CompareString(text, "", TextCompare:=False) <> 0 Then
+                    OskSendKeys(text & "{" & text3 & "}")
+                Else
+                    OskSendKeys("{" & text3 & "}")
+                End If
+            Catch projectError3 As Exception
+                ProjectData.SetProjectError(projectError3)
+                If num > 0 Then
+                    OskSendVirtualKey(num)
+                Else
+                    OskSendKeys(text2)
+                End If
+                Call ProjectData.ClearProjectError()
+            End Try
+            If CTRL Then
+                Ctrl_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Function ResolveNavigationVk(buttonText As String) As Integer
+            'Discarded unreachable code: IL_0056, IL_0090, IL_00b6, IL_00dc, IL_00f4, IL_00fb
+            If String.IsNullOrEmpty(buttonText) Then
+                Return 0
+            End If
+            Select Case buttonText.Trim().ToUpperInvariant()
+                Case "BACKSPACE", "BKSP", "BS"
+                    Return 8
+                Case "ENTER", "RETURN", "ENT"
+                    Return 13
+                Case "ESC", "ESCAPE"
+                    Return 27
+                Case "DEL", "DELETE"
+                    Return 46
+                Case "TAB"
+                    Return 9
+                Case Else
+                    Return 0
+            End Select
+        End Function
+
+        Private Function ResolveSendKeysToken(buttonText As String) As String
+            'Discarded unreachable code: IL_004d, IL_008a, IL_00b3, IL_00dc, IL_00e8
+            If String.IsNullOrEmpty(buttonText) Then
+                Return "BS"
+            End If
+            Select Case buttonText.Trim().ToUpperInvariant()
+                Case "BACKSPACE", "BKSP"
+                    Return "BS"
+                Case "ENTER", "RETURN", "ENT"
+                    Return "ENTER"
+                Case "ESC", "ESCAPE"
+                    Return "ESC"
+                Case "DEL", "DELETE"
+                    Return "DEL"
+                Case Else
+                    Return buttonText.Trim()
+            End Select
+        End Function
+
+        Private Sub InjectVirtualKey(vk As Byte)
+            OskSendVirtualKey(vk)
+        End Sub
+
+        Private Sub TrackInputTarget()
+            Try
+                Dim foregroundWindow As IntPtr = GetForegroundWindow()
+                If Not foregroundWindow = IntPtr.Zero AndAlso Not foregroundWindow = Handle Then
+                    Dim intPtr = GetAncestor(foregroundWindow, 2)
+                    If intPtr = IntPtr.Zero Then
+                        intPtr = foregroundWindow
+                    End If
+                    If Not intPtr = Handle AndAlso Not IsIgnoredInputProcess(intPtr) Then
+                        _lastInputTarget = intPtr
+                    End If
+                End If
+            Catch projectError As Exception
+                ProjectData.SetProjectError(projectError)
+                Call ProjectData.ClearProjectError()
+            End Try
+        End Sub
+
+        Private Function IsIgnoredInputProcess(hwnd As IntPtr) As Boolean
+            Dim lpdwProcessId = 0
+            GetWindowThreadProcessId(hwnd, lpdwProcessId)
+            If lpdwProcessId <= 0 Then
+                Return False
+            End If
+            Try
+                Dim process = Process.GetProcessById(lpdwProcessId)
+                Select Case process.ProcessName.ToLowerInvariant()
+                    Case "onscreenkeyboard", "lcarsmain", "lcarsupdate", "runinstallscript", "lcarsshutdown"
+                        Return True
+                End Select
+            Catch projectError As Exception
+                ProjectData.SetProjectError(projectError)
+                Call ProjectData.ClearProjectError()
+            End Try
+            Return False
+        End Function
+
+        Private Function GetInputTargetHwnd() As IntPtr
+            TrackInputTarget()
+            If _lastInputTarget <> System.IntPtr.Zero AndAlso IsWindow(_lastInputTarget) Then
+                Return _lastInputTarget
+            End If
+            Dim lpClassName As String = Nothing
+            Dim lpWindowName = "LCARS TERMINAL"
+            Dim foundHwnd As IntPtr = FindWindowA(lpClassName, lpWindowName)
+            If foundHwnd <> System.IntPtr.Zero AndAlso IsWindow(foundHwnd) Then
+                Return foundHwnd
+            End If
+            Return System.IntPtr.Zero
+        End Function
+
+        Private Function IsLcarsTerminalHwnd(hwnd As IntPtr) As Boolean
+            'Discarded unreachable code: IL_0083, IL_0094, IL_00a6, IL_00ad
+            If hwnd = System.IntPtr.Zero OrElse Not IsWindow(hwnd) Then
+                Return False
+            End If
+            Try
+                Dim windowTextLength As Integer = GetWindowTextLength(hwnd)
+                If windowTextLength > 0 Then
+                    Dim stringBuilder As New StringBuilder(windowTextLength + 1)
+                    GetWindowTextA(hwnd, stringBuilder, stringBuilder.Capacity)
+                    If stringBuilder.ToString().IndexOf("LCARS TERMINAL", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                        Return True
+                    End If
+                End If
+                Dim lpdwProcessId = 0
+                GetWindowThreadProcessId(hwnd, lpdwProcessId)
+                Dim process = Process.GetProcessById(lpdwProcessId)
+                Return String.Equals(process.ProcessName, "LCARSTerminal", StringComparison.OrdinalIgnoreCase)
+            Catch projectError As Exception
+                ProjectData.SetProjectError(projectError)
+                Dim result = False
+                Call ProjectData.ClearProjectError()
+                Return result
+            End Try
+        End Function
+
+        Private Function TryPostToTerminal(target As IntPtr, kind As Integer, payload As Integer) As Boolean
+            'Discarded unreachable code: IL_0043, IL_0054, IL_005b
+            If WM_LCARS_OSK_INPUT = 0 Then
+                Return False
+            End If
+            If Not IsLcarsTerminalHwnd(target) Then
+                Return False
+            End If
+            Try
+                Dim wM_LCARS_OSK_INPUT = frmKeyboard.WM_LCARS_OSK_INPUT
+                Dim wParam As IntPtr = New IntPtr(kind)
+                Dim lParam As IntPtr = New IntPtr(payload And &HFFFF)
+                Return PostMessageA(target, wM_LCARS_OSK_INPUT, wParam, lParam)
+            Catch projectError As Exception
+                ProjectData.SetProjectError(projectError)
+                Dim result = False
+                Call ProjectData.ClearProjectError()
+                Return result
+            End Try
+        End Function
+
+        Private Sub OskSendVirtualKey(vk As Integer)
+            Dim inputTargetHwnd As IntPtr = GetInputTargetHwnd()
+            If TryPostToTerminal(inputTargetHwnd, 2, vk) Then
+                Return
+            End If
+            TryActivateTarget(inputTargetHwnd)
+            Try
+                keybd_event(vk And &HFF, 0, 0L, 0L)
+                keybd_event(vk And &HFF, 0, 2L, 0L)
+            Catch projectError As Exception
+                ProjectData.SetProjectError(projectError)
+                Call ProjectData.ClearProjectError()
+            End Try
+        End Sub
+
+        Private Sub OskSendKeys(keys As String)
+            If Not String.IsNullOrEmpty(keys) Then
+                Dim inputTargetHwnd As IntPtr = GetInputTargetHwnd()
+                If Not IsLcarsTerminalHwnd(inputTargetHwnd) OrElse Not TryDeliverSendKeysToTerminal(inputTargetHwnd, keys) Then
+                    TryActivateTarget(inputTargetHwnd)
+                    SendKeys.Send(keys)
+                End If
+            End If
+        End Sub
+
+        Private Function TryDeliverSendKeysToTerminal(target As IntPtr, keys As String) As Boolean
+            Dim text = keys
+            Dim text2 = ""
+            While text.Length > 0 AndAlso "^%+".IndexOf(text(0)) >= 0
+                text2 += Conversions.ToString(text(0))
+                text = text.Substring(1)
+            End While
+            If text.StartsWith("{", StringComparison.Ordinal) AndAlso text.EndsWith("}", StringComparison.Ordinal) AndAlso text.Length >= 3 Then
+                Dim text3 As String = text.Substring(1, text.Length - 2).Trim()
+                Dim text4 As String = text3.ToUpperInvariant()
+                Dim num = ResolveNavigationVk(text4)
+                If num = 0 Then
+                    Select Case text4
+                        Case "UP"
+                            num = 38
+                        Case "DOWN"
+                            num = 40
+                        Case "LEFT"
+                            num = 37
+                        Case "RIGHT"
+                            num = 39
+                        Case "HOME"
+                            num = 36
+                        Case "END"
+                            num = 35
+                        Case "PGUP"
+                            num = 33
+                        Case "PGDN"
+                            num = 34
+                        Case "INSERT"
+                            num = 45
+                    End Select
+                End If
+                If num > 0 AndAlso text2.Length = 0 Then
+                    Return TryPostToTerminal(target, 2, num)
+                End If
+                If text3.Length = 1 AndAlso text2.Length = 0 Then
+                    Return Me.TryPostToTerminal(target, 1, AscW(text3(0)))
+                End If
+                Return False
+            End If
+            If text.Length = 1 AndAlso text2.Length = 0 Then
+                Return Me.TryPostToTerminal(target, 1, AscW(text(0)))
+            End If
+            Return False
+        End Function
+
+        Private Sub TryActivateTarget(target As IntPtr)
+            If target = IntPtr.Zero OrElse Not IsWindow(target) Then
+                Return
+            End If
+            Try
+                SetForegroundWindow(target)
+            Catch projectError As Exception
+                ProjectData.SetProjectError(projectError)
+                Call ProjectData.ClearProjectError()
+            End Try
+        End Sub
+
+        Private Sub Shift_Click(sender As Object, e As EventArgs) Handles sbLShift.Click, sbRShift.Click
+            SHIFT = Not SHIFT
+            If SHIFT Then
+                If Not CAPS Then
+                    Dim enumerator As IEnumerator = Nothing
+                    Try
+                        enumerator = SplitContainer1.Panel1.Controls.GetEnumerator()
+                        While enumerator.MoveNext()
+                            Dim lCARSbuttonClass = CType(enumerator.Current, LCARSbuttonClass)
+                            lCARSbuttonClass.ButtonText = Conversions.ToString(lCARSbuttonClass.Data2)
+                        End While
+
+                    Finally
+                        If TypeOf enumerator Is IDisposable Then
+                            TryCast(enumerator, IDisposable).Dispose()
                         End If
-                    Next
+                    End Try
+                Else
+                    Dim enumerator2 As IEnumerator = Nothing
+                    Try
+                        enumerator2 = SplitContainer1.Panel1.Controls.GetEnumerator()
+                        While enumerator2.MoveNext()
+                            Dim lCARSbuttonClass2 = CType(enumerator2.Current, LCARSbuttonClass)
+                            If Not (lCARSbuttonClass2.ButtonText.Length = 1 And Char.IsLetter(Conversions.ToChar(lCARSbuttonClass2.ButtonText))) Then
+                                lCARSbuttonClass2.ButtonText = Conversions.ToString(lCARSbuttonClass2.Data2)
+                            End If
+                        End While
+
+                    Finally
+                        If TypeOf enumerator2 Is IDisposable Then
+                            TryCast(enumerator2, IDisposable).Dispose()
+                        End If
+                    End Try
                 End If
-
-                sbLShift.Color = LCARS.LCARScolorStyles.SystemFunction
-                sbRShift.Color = LCARS.LCARScolorStyles.SystemFunction
-
-            End If
-        End If
-    End Sub
-
-
-    Private Sub sbCaps_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbCaps.Click
-
-        ' Sets up the on screen and real world keyboard Caps lock on or off.
-        If sbCaps.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            Call keybd_event(VK_CAPITAL, 0, KEYEVENTF_EXTENDEDKEY, 0)
-            Call keybd_event(VK_CAPITAL, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-            sbCaps.Color = LCARS.LCARScolorStyles.PrimaryFunction 'CAPS LOCK ON
-        Else
-            If sbCaps.Color = LCARS.LCARScolorStyles.PrimaryFunction Then
-                Call keybd_event(VK_CAPITAL, 0, KEYEVENTF_EXTENDEDKEY, 0)
-                Call keybd_event(VK_CAPITAL, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-                sbCaps.Color = LCARS.LCARScolorStyles.SystemFunction 'CAPS LOCK OFF
-            End If
-        End If
-
-
-
-
-
-    End Sub
-
-    Private Sub sbTab_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbTab.Click
-
-
-        tab = Not tab
-
-        ' Simulate key press
-        Call keybd_event(VK_TAB, 0, KEYEVENTF_EXTENDEDKEY, 0)
-        Call keybd_event(VK_TAB, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-
-
-
-    End Sub
-
-    Private Sub sbRwin_MouseDown(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles sbRwin.MouseDown, sbLWin.MouseDown
-
-        'Enables timer to detect short or long click & release of windows keys
-        Timer3.Enabled = True
-
-    End Sub
-
-    Private Sub sblwin_MouseUp(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles sbRwin.MouseUp, sbLWin.MouseUp
-
-        'Short windows key click event
-        WIN = Not WIN
-        If Timer3.Enabled = True Then
-            Call keybd_event(VK_LWIN, 0, KEYEVENTF_EXTENDEDKEY, 0)
-            Call keybd_event(VK_LWIN, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-            Exit Sub
-
-        Else
-
-            'Simulates windows key click & hold.
-            If WIN = True Then
-                Call keybd_event(VK_LWIN, 0, KEYEVENTF_EXTENDEDKEY, 0)
-                sbLWin.Color = LCARS.LCARScolorStyles.PrimaryFunction
-                sbRwin.Color = LCARS.LCARScolorStyles.PrimaryFunction
-                Exit Sub
-
+                sbLShift.Color = LCARScolorStyles.PrimaryFunction
+                sbRShift.Color = LCARScolorStyles.PrimaryFunction
             Else
-                ' Simulate key release
-                If sbLWin.Color = LCARS.LCARScolorStyles.PrimaryFunction Then
-                    Call keybd_event(VK_PRINT, 0, KEYEVENTF_EXTENDEDKEY, 0)
-                    Call keybd_event(VK_PRINT, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-                    Call keybd_event(VK_LWIN, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-                    sbRwin.Color = LCARS.LCARScolorStyles.SystemFunction
-                    sbLWin.Color = LCARS.LCARScolorStyles.SystemFunction
+                If Not CAPS Then
+                    Dim enumerator3 As IEnumerator = Nothing
+                    Try
+                        enumerator3 = SplitContainer1.Panel1.Controls.GetEnumerator()
+                        While enumerator3.MoveNext()
+                            Dim lCARSbuttonClass3 = CType(enumerator3.Current, LCARSbuttonClass)
+                            lCARSbuttonClass3.ButtonText = Conversions.ToString(lCARSbuttonClass3.Data)
+                        End While
 
+                    Finally
+                        If TypeOf enumerator3 Is IDisposable Then
+                            TryCast(enumerator3, IDisposable).Dispose()
+                        End If
+                    End Try
+                Else
+                    Dim enumerator4 As IEnumerator = Nothing
+                    Try
+                        enumerator4 = SplitContainer1.Panel1.Controls.GetEnumerator()
+                        While enumerator4.MoveNext()
+                            Dim lCARSbuttonClass4 = CType(enumerator4.Current, LCARSbuttonClass)
+                            If Not (lCARSbuttonClass4.ButtonText.Length = 1 And Char.IsLetter(Conversions.ToChar(lCARSbuttonClass4.ButtonText))) Then
+                                lCARSbuttonClass4.ButtonText = Conversions.ToString(lCARSbuttonClass4.Data)
+                            End If
+                        End While
+
+                    Finally
+                        If TypeOf enumerator4 Is IDisposable Then
+                            TryCast(enumerator4, IDisposable).Dispose()
+                        End If
+                    End Try
+                End If
+                sbLShift.Color = LCARScolorStyles.SystemFunction
+                sbRShift.Color = LCARScolorStyles.SystemFunction
+            End If
+            If SHIFT Then
+                If btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                    Dim enumerator5 As IEnumerator = Nothing
+                    Try
+                        enumerator5 = SplitContainer1.Panel2.Controls.GetEnumerator()
+                        While enumerator5.MoveNext()
+                            Dim lCARSbuttonClass5 = CType(enumerator5.Current, LCARSbuttonClass)
+                            lCARSbuttonClass5.ButtonText = Conversions.ToString(lCARSbuttonClass5.Data2)
+                        End While
+
+                    Finally
+                        If TypeOf enumerator5 Is IDisposable Then
+                            TryCast(enumerator5, IDisposable).Dispose()
+                        End If
+                    End Try
+                Else
+                    Dim enumerator6 As IEnumerator = Nothing
+                    Try
+                        enumerator6 = SplitContainer1.Panel2.Controls.GetEnumerator()
+                        While enumerator6.MoveNext()
+                            Dim lCARSbuttonClass6 = CType(enumerator6.Current, LCARSbuttonClass)
+                            If Not (lCARSbuttonClass6.ButtonText.Length = 1 And Char.IsLetter(Conversions.ToChar(lCARSbuttonClass6.ButtonText))) Then
+                                lCARSbuttonClass6.ButtonText = Conversions.ToString(lCARSbuttonClass6.Data)
+                            End If
+                        End While
+
+                    Finally
+                        If TypeOf enumerator6 Is IDisposable Then
+                            TryCast(enumerator6, IDisposable).Dispose()
+                        End If
+                    End Try
+                End If
+                sbLShift.Color = LCARScolorStyles.PrimaryFunction
+                sbRShift.Color = LCARScolorStyles.PrimaryFunction
+            Else
+                If SHIFT Then
+                    Return
+                End If
+                If btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                    Dim enumerator7 As IEnumerator = Nothing
+                    Try
+                        enumerator7 = SplitContainer1.Panel2.Controls.GetEnumerator()
+                        While enumerator7.MoveNext()
+                            Dim lCARSbuttonClass7 = CType(enumerator7.Current, LCARSbuttonClass)
+                            lCARSbuttonClass7.ButtonText = Conversions.ToString(lCARSbuttonClass7.Data)
+                        End While
+
+                    Finally
+                        If TypeOf enumerator7 Is IDisposable Then
+                            TryCast(enumerator7, IDisposable).Dispose()
+                        End If
+                    End Try
+                Else
+                    Dim enumerator8 As IEnumerator = Nothing
+                    Try
+                        enumerator8 = SplitContainer1.Panel2.Controls.GetEnumerator()
+                        While enumerator8.MoveNext()
+                            Dim lCARSbuttonClass8 = CType(enumerator8.Current, LCARSbuttonClass)
+                            If Not (lCARSbuttonClass8.ButtonText.Length = 1 And Char.IsLetter(Conversions.ToChar(lCARSbuttonClass8.ButtonText))) Then
+                                lCARSbuttonClass8.ButtonText = Conversions.ToString(lCARSbuttonClass8.Data)
+                            End If
+                        End While
+
+                    Finally
+                        If TypeOf enumerator8 Is IDisposable Then
+                            TryCast(enumerator8, IDisposable).Dispose()
+                        End If
+                    End Try
+                End If
+                sbLShift.Color = LCARScolorStyles.SystemFunction
+                sbRShift.Color = LCARScolorStyles.SystemFunction
+            End If
+        End Sub
+
+        Private Sub sbCaps_Click(sender As Object, e As EventArgs) Handles sbCaps.Click
+            If sbCaps.Color = LCARScolorStyles.SystemFunction Then
+                keybd_event(20, 0, 1L, 0L)
+                keybd_event(20, 0, 3L, 0L)
+                sbCaps.Color = LCARScolorStyles.PrimaryFunction
+            ElseIf sbCaps.Color = LCARScolorStyles.PrimaryFunction Then
+                keybd_event(20, 0, 1L, 0L)
+                keybd_event(20, 0, 3L, 0L)
+                sbCaps.Color = LCARScolorStyles.SystemFunction
+            End If
+        End Sub
+
+        Private Sub sbTab_Click(sender As Object, e As EventArgs) Handles sbTab.Click
+            tab = Not tab
+            keybd_event(9, 0, 1L, 0L)
+            keybd_event(9, 0, 3L, 0L)
+        End Sub
+
+        Private Sub sbRwin_MouseDown(sender As Object, e As MouseEventArgs) Handles sbRwin.MouseDown, sbLWin.MouseDown
+            Timer3.Enabled = True
+        End Sub
+
+        Private Sub sblwin_MouseUp(sender As Object, e As MouseEventArgs) Handles sbRwin.MouseUp, sbLWin.MouseUp
+            'Discarded unreachable code: IL_003d, IL_0075
+            WIN = Not WIN
+            If Timer3.Enabled Then
+                keybd_event(91, 0, 1L, 0L)
+                keybd_event(91, 0, 3L, 0L)
+            ElseIf WIN Then
+                keybd_event(91, 0, 1L, 0L)
+                sbLWin.Color = LCARScolorStyles.PrimaryFunction
+                sbRwin.Color = LCARScolorStyles.PrimaryFunction
+            ElseIf sbLWin.Color = LCARScolorStyles.PrimaryFunction Then
+                keybd_event(42, 0, 1L, 0L)
+                keybd_event(42, 0, 3L, 0L)
+                keybd_event(91, 0, 3L, 0L)
+                sbRwin.Color = LCARScolorStyles.SystemFunction
+                sbLWin.Color = LCARScolorStyles.SystemFunction
+            End If
+        End Sub
+
+        Private Sub Timer3_Tick(sender As Object, e As EventArgs) Handles Timer3.Tick
+            Timer3.Enabled = False
+        End Sub
+
+        Private Sub Ctrl_Click(sender As Object, e As EventArgs) Handles sbRCtrl.Click, sbLCtrl.Click
+            CTRL = Not CTRL
+            If CTRL Then
+                sbLCtrl.Color = LCARScolorStyles.PrimaryFunction
+                sbRCtrl.Color = LCARScolorStyles.PrimaryFunction
+            Else
+                sbLCtrl.Color = LCARScolorStyles.SystemFunction
+                sbRCtrl.Color = LCARScolorStyles.SystemFunction
+            End If
+        End Sub
+
+        Private Sub Alt_Click(sender As Object, e As EventArgs) Handles sbLAlt.Click, sbRAlt.Click
+            ALT = Not ALT
+            If ALT Then
+                keybd_event(18, 0, 1L, 0L)
+                sbLAlt.Color = LCARScolorStyles.PrimaryFunction
+                sbRAlt.Color = LCARScolorStyles.PrimaryFunction
+                Timer2.Enabled = True
+            Else
+                keybd_event(18, 0, 3L, 0L)
+                sbLAlt.Color = LCARScolorStyles.SystemFunction
+                sbRAlt.Color = LCARScolorStyles.SystemFunction
+            End If
+        End Sub
+
+        Private Sub frmKeyboard_Move(sender As Object, e As EventArgs) Handles Me.Move
+            If Not isMoving AndAlso isInit Then
+                SaveSetting("x32_OSK", "Settings", "Location", Conversions.ToString(Left) & ", " & Conversions.ToString(Top))
+            End If
+        End Sub
+
+        Private Sub frmKeyboard_Resize(sender As Object, e As EventArgs) Handles Me.Resize
+            ' Intentionally empty. Original OSK only scaled on ResizeEnd / explicit keypad calls.
+            ' Scaling during Resize breaks SplitterDistance and leaves keys clipped.
+        End Sub
+
+        Private Sub StandardButton1_Click(sender As Object, e As EventArgs)
+            ' Do not mutate design baseline oWidth (that broke scale factors).
+            frmKeyboard_ResizeEnd(RuntimeHelpers.GetObjectValue(sender), e)
+        End Sub
+
+        Private Sub pnlKeyboard_Paint(sender As Object, e As PaintEventArgs)
+        End Sub
+
+        Private Sub sbDEL_Click(sender As Object, e As EventArgs)
+            Dim standardButton As StandardButton = New StandardButton()
+            standardButton.ButtonText = "DELETE"
+            StandardKey_Click(standardButton, e)
+        End Sub
+
+        Private Sub StandardButton1_Click_1(sender As Object, e As EventArgs) Handles sbTitle.Click
+        End Sub
+
+        Private Sub sbTitle_MouseDown(sender As Object, e As MouseEventArgs) Handles sbTitle.MouseDown
+            isMoving = True
+            oLoc = New Point(MousePosition.X, MousePosition.Y)
+        End Sub
+
+        Private Sub sbTitle_MouseMove(sender As Object, e As MouseEventArgs) Handles sbTitle.MouseMove
+            If MouseButtons = MouseButtons.Left AndAlso isMoving Then
+                Left += MousePosition.X - oLoc.X
+                Top += MousePosition.Y - oLoc.Y
+                oLoc = New Point(MousePosition.X, MousePosition.Y)
+                If _snapEnabled Then
+                    Try
+                        Dim preview As Point = GetNearestSnapPoint()
+                        If preview <> _snapPreviewPoint Then
+                            _snapPreviewPoint = preview
+                            Dim dx As Integer = Math.Abs(Left - preview.X)
+                            Dim dy As Integer = Math.Abs(Top - preview.Y)
+                            Opacity = If(dx + dy < 80, 0.92, 1.0)
+                        End If
+                    Catch
+                    End Try
                 End If
             End If
-
-        End If
-
-    End Sub
-
-    Private Sub Timer3_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Timer3.Tick
-
-        Timer3.Enabled = False
-
-    End Sub
-
-
-    Private Sub Ctrl_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbRCtrl.Click, sbLCtrl.Click
-
-        CTRL = Not CTRL
-
-        If CTRL = True Then
-            sbLCtrl.Color = LCARS.LCARScolorStyles.PrimaryFunction
-            sbRCtrl.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Else
-            sbLCtrl.Color = LCARS.LCARScolorStyles.SystemFunction
-            sbRCtrl.Color = LCARS.LCARScolorStyles.SystemFunction
-        End If
-    End Sub
-
-    Private Sub Alt_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbLAlt.Click, sbRAlt.Click
-
-        ALT = Not ALT
-
-        If ALT = True Then
-
-            ' Simulate key press
-            Call keybd_event(VK_ALT, 0, KEYEVENTF_EXTENDEDKEY, 0)
-            sbLAlt.Color = LCARS.LCARScolorStyles.PrimaryFunction
-            sbRAlt.Color = LCARS.LCARScolorStyles.PrimaryFunction
-            Timer2.Enabled = True
-        Else
-            ' Simulate key release
-            Call keybd_event(VK_ALT, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-            sbLAlt.Color = LCARS.LCARScolorStyles.SystemFunction
-            sbRAlt.Color = LCARS.LCARScolorStyles.SystemFunction
-        End If
-
-    End Sub
-
-    Private Sub frmKeyboard_Move(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Move
-        If isMoving = False Then
-            If isInit = True Then SaveSetting("x32_OSK", "Settings", "Location", Me.Left & ", " & Me.Top)
-        End If
-
-    End Sub
-
-    Private Sub frmKeyboard_Resize(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Resize
-
-    End Sub
-
-
-
-
-
-    Private Sub StandardButton1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        oWidth += 74
-        frmKeyboard_ResizeEnd(sender, e)
-
-    End Sub
-
-    Private Sub pnlKeyboard_Paint(ByVal sender As System.Object, ByVal e As System.Windows.Forms.PaintEventArgs)
-
-    End Sub
-
-    Private Sub sbDEL_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        Dim myKey As New LCARS.Controls.StandardButton
-
-
-        myKey.ButtonText = "DELETE"
-
-
-        StandardKey_Click(myKey, e)
-
-    End Sub
-
-    Private Sub StandardButton1_Click_1(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbTitle.Click
-
-    End Sub
-
-    Private Sub sbTitle_MouseDown(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles sbTitle.MouseDown
-        isMoving = True
-        oLoc = New Point(MousePosition.X, MousePosition.Y)
-
-    End Sub
-
-    Private Sub sbTitle_MouseMove(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles sbTitle.MouseMove
-        If MouseButtons = Windows.Forms.MouseButtons.Left Then
-            Me.Left += MousePosition.X - oLoc.X
-
-
-            Me.Top += MousePosition.Y - oLoc.Y
-
-            oLoc = New Point(MousePosition.X, MousePosition.Y)
-            Application.DoEvents()
-        End If
-    End Sub
-
-    Private Sub sbTitle_MouseUp(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles sbTitle.MouseUp
-        isMoving = False
-        frmKeyboard_Move(sender, e)
-
-    End Sub
-
-
-
-    Public Sub sbIncrementPlus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        increment += 2
-        lblIncrement.Text = increment & " PIXELS"
-    End Sub
-
-    Public Sub sbIncrementMinus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        If increment > 2 Then increment -= 2
-        lblIncrement.Text = increment & " PIXELS"
-    End Sub
-
-    Public Sub sbHeightPlus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-
-
-        Me.Height += increment
-        Me.Top -= increment / 2
-        frmKeyboard_ResizeEnd(sender, e)
-
-
-
-    End Sub
-
-    Public Sub sbHeightMinus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-
-
-        Me.Height -= increment
-        Me.Top += increment / 2
-        frmKeyboard_ResizeEnd(sender, e)
-
-
-    End Sub
-
-    Public Sub sbWidthPlus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-
-
-        Me.Width += increment
-        Me.Left -= increment / 2
-        frmKeyboard_ResizeEnd(sender, e)
-
-
-
-    End Sub
-
-    Public Sub sbWidthMinus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-
-
-        Me.Width -= increment
-        Me.Left += increment / 2
-        frmKeyboard_ResizeEnd(sender, e)
-
-
-
-    End Sub
-
-
-    Private Sub sbDone_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        frmKeyboard_ResizeEnd(sender, e)
-        sbNum.Color = LCARS.LCARScolorStyles.MiscFunction
-        sbNum.Clickable = True
-    End Sub
-
-    Private Sub sbChangeSize_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbChangeSize.Click
-
-        'Resets form from extended keyboard to standard keyboard
-        If sbNum.Color = LCARS.LCARScolorStyles.StaticBlue Then
-            sbNum_Click(sender, e)
-            Resize_Keypad.Show()
-        Else
-
-            'Displays the resize keypad form.
-            Resize_Keypad.Show()
-
-        End If
-
-    End Sub
-
-    Private Sub StandardButton1_Click_2(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles StandardButton1.Click
-
-        If sbNum.Color = LCARS.LCARScolorStyles.MiscFunction Then
-            My.Settings.Mode = False
-        Else
-            If sbNum.Color = LCARS.LCARScolorStyles.StaticBlue Then
+        End Sub
+
+        Private Sub sbTitle_MouseUp(sender As Object, e As MouseEventArgs) Handles sbTitle.MouseUp
+            isMoving = False
+            Try
+                Opacity = 1.0
+            Catch
+            End Try
+            _snapPreviewPoint = Point.Empty
+            SnapOskIfEnabled()
+            frmKeyboard_Move(RuntimeHelpers.GetObjectValue(sender), e)
+        End Sub
+
+        Public Sub sbIncrementPlus_Click(sender As Object, e As EventArgs)
+            increment += 2
+            lblIncrement.Text = Conversions.ToString(increment) & " PIXELS"
+        End Sub
+
+        Public Sub sbIncrementMinus_Click(sender As Object, e As EventArgs)
+            If increment > 2 Then
+                increment -= 2
+            End If
+            lblIncrement.Text = Conversions.ToString(increment) & " PIXELS"
+        End Sub
+
+        Public Sub sbHeightPlus_Click(sender As Object, e As EventArgs)
+            Height += increment
+            Top = CInt(Math.Round(Top - increment / 2.0))
+            ApplyKeyboardScale("height-plus")
+            SaveSetting("x32_OSK", "Settings", "Size", Width.ToString() & ", " & Height.ToString())
+        End Sub
+
+        Public Sub sbHeightMinus_Click(sender As Object, e As EventArgs)
+            Height -= increment
+            Top = CInt(Math.Round(Top + increment / 2.0))
+            ApplyKeyboardScale("height-minus")
+            SaveSetting("x32_OSK", "Settings", "Size", Width.ToString() & ", " & Height.ToString())
+        End Sub
+
+        Public Sub sbWidthPlus_Click(sender As Object, e As EventArgs)
+            Width += increment
+            Left = CInt(Math.Round(Left - increment / 2.0))
+            ApplyKeyboardScale("width-plus")
+            SaveSetting("x32_OSK", "Settings", "Size", Width.ToString() & ", " & Height.ToString())
+        End Sub
+
+        Public Sub sbWidthMinus_Click(sender As Object, e As EventArgs)
+            Width -= increment
+            Left = CInt(Math.Round(Left + increment / 2.0))
+            ApplyKeyboardScale("width-minus")
+            SaveSetting("x32_OSK", "Settings", "Size", Width.ToString() & ", " & Height.ToString())
+        End Sub
+
+        Private Sub sbDone_Click(sender As Object, e As EventArgs)
+            frmKeyboard_ResizeEnd(RuntimeHelpers.GetObjectValue(sender), e)
+            sbNum.Color = LCARScolorStyles.MiscFunction
+            sbNum.Clickable = True
+        End Sub
+
+        Private Sub sbChangeSize_Click(sender As Object, e As EventArgs) Handles sbChangeSize.Click
+            If sbNum.Color = LCARScolorStyles.StaticBlue Then
+                sbNum_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+            Resize_Keypad.TopMost = True
+            Resize_Keypad.Show(Me)
+            Resize_Keypad.BringToFront()
+        End Sub
+
+        Private Sub StandardButton1_Click_2(sender As Object, e As EventArgs) Handles StandardButton1.Click
+            _snapEnabled = Not _snapEnabled
+            SaveSetting("x32_OSK", "Settings", "SnapEnabled", If(_snapEnabled, "1", "0"))
+            UpdateSnapButtonChrome()
+            If _snapEnabled Then SnapOskIfEnabled()
+        End Sub
+
+        Private Sub StandardButton2_Click(sender As Object, e As EventArgs) Handles StandardButton2.Click
+            If sbNum.Color = LCARScolorStyles.MiscFunction Then
+                My.Settings.Mode = False
+            ElseIf sbNum.Color = LCARScolorStyles.StaticBlue Then
                 My.Settings.Mode = True
             End If
-        End If
+            My.Settings.Save()
+            Hide()
+        End Sub
 
-        My.Settings.Save()
-        Me.Close()
-        End
-
-    End Sub
-
-    Private Sub sbNum_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbNum.Click
-
-        If sbNum.Color = LCARS.LCARScolorStyles.MiscFunction Then
-            Label1.Text = SplitContainer1.SplitterDistance
-            Label2.Text = SplitContainer1.Panel2.Width
-            Label3.Text = Me.Width
-
-
-            Me.Width = Me.Width * 0.79
-            SplitContainer1.Panel2Collapsed = True
-            sbNum.Color = LCARS.LCARScolorStyles.StaticBlue
-
-
-        Else
-
-            If sbNum.Color = LCARS.LCARScolorStyles.StaticBlue Then
-
-                Me.Width = Label3.Text
-                sbNum.Color = LCARS.LCARScolorStyles.MiscFunction
-                SplitContainer1.SplitterDistance = Label1.Text
+        Private Sub sbNum_Click(sender As Object, e As EventArgs) Handles sbNum.Click
+            If sbNum.Color = LCARScolorStyles.MiscFunction Then
+                Label1.Text = Conversions.ToString(SplitContainer1.SplitterDistance)
+                Label2.Text = Conversions.ToString(SplitContainer1.Panel2.Width)
+                Label3.Text = Conversions.ToString(Width)
+                Width = CInt(Math.Round(Width * 0.79))
+                SplitContainer1.Panel2Collapsed = True
+                sbNum.Color = LCARScolorStyles.StaticBlue
+            ElseIf sbNum.Color = LCARScolorStyles.StaticBlue Then
+                Width = Conversions.ToInteger(Label3.Text)
+                sbNum.Color = LCARScolorStyles.MiscFunction
+                SplitContainer1.SplitterDistance = Conversions.ToInteger(Label1.Text)
                 SplitContainer1.Panel2Collapsed = False
-
-
             End If
-        End If
-
-    End Sub
-
-
-    Private Sub sbPgUp_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        SendKeys.Send("{pgup}")
-    End Sub
-
-    Private Sub sbPgDown_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-        SendKeys.Send("{pgdn}")
-    End Sub
-
-    Private Sub sbPgUp_Click_1(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-    End Sub
-
-
-    Private Sub sbRForwardSlash_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-    End Sub
-
-    Private Sub sbPgUp_Click_2(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbPgUp.Click
-
-        SendKeys.Send("{pgup}")
-
-    End Sub
-
-    Private Sub sbPgDown_Click_1(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbPgDown.Click
-
-        SendKeys.Send("{pgdn}")
-
-    End Sub
-
-    Private Sub SplitContainer1_Panel1_Paint(ByVal sender As System.Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles SplitContainer1.Panel1.Paint
-
-    End Sub
-
-    Private Sub StandardButton2_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles StandardButton2.Click
-        Me.WindowState = FormWindowState.Minimized
-
-    End Sub
-
-    Private Sub sbBrowse_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-
-
-        Dim myfile As New OpenFileDialog
-        Dim result As DialogResult
-
-        result = myfile.ShowDialog
-
-        If result = Windows.Forms.DialogResult.OK Then
-            'txtUBLoc.Text = myfile.FileName
-        End If
-
-    End Sub
-
-
-    Public Sub sbLock_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbLock.Click
-
-        If sbFn.Clickable = True Then
-            sbFn.Clickable = False
-            sbFn.Color = LCARS.LCARScolorStyles.FunctionUnavailable
-
-        Else
-
-            sbFn.Clickable = True
-            sbFn.Color = LCARS.LCARScolorStyles.StaticTan
-
-        End If
-
-    End Sub
-
-    Private Sub sbFn_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn.Click
-
-        UserButtons.Show()
-
-
-    End Sub
-
-    Private Sub sbFn1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn1.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN1Name = UserButtons.txtUBName.Text
-            My.Settings.FN1Path = UserButtons.txtUBLoc.Text
-            sbFn1.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN1Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-    End Sub
-
-    Private Sub sbFn2_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn2.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN2Name = UserButtons.txtUBName.Text
-            My.Settings.FN2Path = UserButtons.txtUBLoc.Text
-            sbFn2.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN2Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFN3_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFN3.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN3Name = UserButtons.txtUBName.Text
-            My.Settings.FN3Path = UserButtons.txtUBLoc.Text
-            sbFN3.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN3Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn4_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn4.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN4Name = UserButtons.txtUBName.Text
-            My.Settings.FN4Path = UserButtons.txtUBLoc.Text
-            sbFn4.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN4Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn5_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn5.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN5Name = UserButtons.txtUBName.Text
-            My.Settings.FN5Path = UserButtons.txtUBLoc.Text
-            sbFn5.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN5Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn6_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn6.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN6Name = UserButtons.txtUBName.Text
-            My.Settings.FN6Path = UserButtons.txtUBLoc.Text
-            sbFn6.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN6Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn7_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn7.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN7Name = UserButtons.txtUBName.Text
-            My.Settings.FN7Path = UserButtons.txtUBLoc.Text
-            sbFn7.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN7Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn8_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn8.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN8Name = UserButtons.txtUBName.Text
-            My.Settings.FN8Path = UserButtons.txtUBLoc.Text
-            sbFn8.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN8Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn9_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn9.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN9Name = UserButtons.txtUBName.Text
-            My.Settings.FN9Path = UserButtons.txtUBLoc.Text
-            sbFn9.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN9Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn10_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn10.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN10Name = UserButtons.txtUBName.Text
-            My.Settings.FN10Path = UserButtons.txtUBLoc.Text
-            sbFn10.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN10Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn11_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn11.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN11Name = UserButtons.txtUBName.Text
-            My.Settings.FN11Path = UserButtons.txtUBLoc.Text
-            sbFn11.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN11Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub sbFn12_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbFn12.Click
-
-        If sbFn.Clickable = True Then
-            My.Settings.FN12Name = UserButtons.txtUBName.Text
-            My.Settings.FN12Path = UserButtons.txtUBLoc.Text
-            sbFn12.Text = UserButtons.txtUBName.Text
-            My.Settings.Save()
-
-        Else
-            If Not UserButtons.Visible = True Then
-                Try
-                    Shell(My.Settings.FN12Path, vbMaximizedFocus)
-                Catch ex As Exception
-                End Try
-            End If
-        End If
-
-    End Sub
-
-    Private Sub Arrow_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles abUp.Click, abDown.Click, abLeft.Click, abRight.Click
-
-        Dim myKey As New LCARS.Controls.StandardButton
-
-        Select Case CType(sender, LCARS.Controls.ArrowButton).ArrowDirection
-            Case LCARS.LCARSarrowDirection.Up
-                myKey.ButtonText = "UP"
-            Case LCARS.LCARSarrowDirection.Down
-                myKey.ButtonText = "DOWN"
-            Case LCARS.LCARSarrowDirection.Left
-                myKey.ButtonText = "LEFT"
-            Case LCARS.LCARSarrowDirection.Right
-                myKey.ButtonText = "RIGHT"
-        End Select
-
-        StandardKey_Click(myKey, e)
-
-    End Sub
-
-
-    Private Sub sbR9_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR9.Click
-
-        Dim keyData As String = ""
-        Dim NumLockState As Boolean
-
-
-        If NumLockState <> True Then
-
-            If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-                SendKeys.Send("{pgup}")
+        End Sub
+
+        Private Sub sbPgUp_Click(sender As Object, e As EventArgs)
+            OskSendKeys("{pgup}")
+        End Sub
+
+        Private Sub sbPgDown_Click(sender As Object, e As EventArgs)
+            OskSendKeys("{pgdn}")
+        End Sub
+
+        Private Sub sbPgUp_Click_1(sender As Object, e As EventArgs)
+        End Sub
+
+        Private Sub sbRForwardSlash_Click(sender As Object, e As EventArgs)
+        End Sub
+
+        Private Sub sbPgUp_Click_2(sender As Object, e As EventArgs) Handles sbPgUp.Click
+            OskSendKeys("{pgup}")
+        End Sub
+
+        Private Sub sbPgDown_Click_1(sender As Object, e As EventArgs) Handles sbPgDown.Click
+            OskSendKeys("{pgdn}")
+        End Sub
+
+        Private Sub SplitContainer1_Panel1_Paint(sender As Object, e As PaintEventArgs) Handles SplitContainer1.Panel1.Paint
+        End Sub
+
+        Private Function IsRunningElevated() As Boolean
+            'Discarded unreachable code: IL_001d, IL_002e, IL_0035
+            Try
+                Dim current As WindowsIdentity = WindowsIdentity.GetCurrent()
+                Dim windowsPrincipal As WindowsPrincipal = New WindowsPrincipal(current)
+                Return windowsPrincipal.IsInRole(WindowsBuiltInRole.Administrator)
+            Catch projectError As Exception
+                ProjectData.SetProjectError(projectError)
+                Dim result = False
+                Call ProjectData.ClearProjectError()
+                Return result
+            End Try
+        End Function
+
+        Private Sub UpdateElevateButtonState()
+            If IsRunningElevated() Then
+                sbElevate.ButtonText = "ELEVATED"
+                sbElevate.Text = "ELEVATED"
+                sbElevate.Data = "ELEVATED"
+                sbElevate.Data2 = "ELEVATED"
+                sbElevate.Color = LCARScolorStyles.PrimaryFunction
             Else
-                SendKeys.Send("{9}")
+                sbElevate.ButtonText = "ELEVATE"
+                sbElevate.Text = "ELEVATE"
+                sbElevate.Data = "ELEVATE"
+                sbElevate.Data2 = "ELEVATE"
+                sbElevate.Color = LCARScolorStyles.SystemFunction
             End If
+        End Sub
 
-
-            If SHIFT = True Then
-                Shift_Click(sender, e)
+        Private Sub sbElevate_Click(sender As Object, e As EventArgs)
+            Dim flag As Boolean = IsRunningElevated()
+            Dim prompt = If(Not flag, "Restart keyboard with admin rights?", "Restart keyboard without admin rights?")
+            If MsgBox(prompt, MsgBoxStyle.YesNo Or MsgBoxStyle.Question) <> MsgBoxResult.Yes Then
+                Return
             End If
-        End If
+            Try
+                If flag Then
+                    Dim processStartInfo As ProcessStartInfo = New ProcessStartInfo()
+                    processStartInfo.FileName = "explorer.exe"
+                    processStartInfo.Arguments = """" & Application.ExecutablePath & """"
+                    processStartInfo.UseShellExecute = True
+                    Process.Start(processStartInfo)
+                Else
+                    Dim processStartInfo2 As ProcessStartInfo = New ProcessStartInfo()
+                    processStartInfo2.FileName = Application.ExecutablePath
+                    processStartInfo2.WorkingDirectory = Application.StartupPath
+                    processStartInfo2.UseShellExecute = True
+                    processStartInfo2.Verb = "runas"
+                    Process.Start(processStartInfo2)
+                End If
+                _allowProcessExit = True
+                Call Application.Exit()
+            Catch ex As Win32Exception
+                ProjectData.SetProjectError(ex)
+                Dim ex2 = ex
+                If Not flag Then
+                    MsgBox("Elevation was cancelled or failed.", MsgBoxStyle.Exclamation)
+                Else
+                    MsgBox("Unable to restart the keyboard without admin rights." & vbCrLf & ex2.Message, MsgBoxStyle.Exclamation)
+                End If
+                Call ProjectData.ClearProjectError()
+            Catch ex3 As Exception
+                ProjectData.SetProjectError(ex3)
+                Dim ex4 = ex3
+                MsgBox("Unable to restart the keyboard." & vbCrLf & ex4.Message, MsgBoxStyle.Exclamation)
+                Call ProjectData.ClearProjectError()
+            End Try
+        End Sub
 
-    End Sub
+        Private Sub sbBrowse_Click(sender As Object, e As EventArgs)
+            Dim openFileDialog As OpenFileDialog = New OpenFileDialog()
+            Dim dialogResult As DialogResult = openFileDialog.ShowDialog()
+            If dialogResult <> DialogResult.OK Then
+            End If
+        End Sub
 
-    Private Sub sbR8_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR8.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{UP}")
-        Else
-            SendKeys.Send("{8}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbR7_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR7.Click
-
-        Dim keyData As String = ""
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{HOME}")
-        Else
-            SendKeys.Send("{7}")
-        End If
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbR6_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR6.Click
-
-        Dim keyData As String = ""
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-
-            SendKeys.Send("{RIGHT}")
-        Else
-            SendKeys.Send("{6}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbR5_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR5.Click
-
-        Dim keyData As String = ""
-        Dim NumLockState As Boolean
-
-
-        If NumLockState <> True Then
-
-            If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-                SendKeys.Send("{5}")
+        Public Sub sbLock_Click(sender As Object, e As EventArgs) Handles sbLock.Click
+            If sbFn.Clickable Then
+                sbFn.Clickable = False
+                sbFn.Color = LCARScolorStyles.FunctionUnavailable
             Else
-                SendKeys.Send("{5}")
+                sbFn.Clickable = True
+                sbFn.Color = LCARScolorStyles.StaticTan
             End If
+        End Sub
 
+        Private Sub sbFn_Click(sender As Object, e As EventArgs) Handles sbFn.Click
+            UserButtons.Show()
+        End Sub
 
-            If SHIFT = True Then
-                Shift_Click(sender, e)
+        Private Sub sbFn1_Click(sender As Object, e As EventArgs) Handles sbFn1.Click
+            If sbFn.Clickable Then
+                My.Settings.FN1Name = UserButtons.txtUBName.Text
+                My.Settings.FN1Path = UserButtons.txtUBLoc.Text
+                sbFn1.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN1Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
             End If
-        End If
-
-    End Sub
-
-    Private Sub sbR4_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR4.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{LEFT}")
-        Else
-            SendKeys.Send("{4}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbR3_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR3.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{pgdn}")
-        Else
-            SendKeys.Send("{3}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbR2_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR2.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{DOWN}")
-        Else
-            SendKeys.Send("{2}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbR1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR1.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{END}")
-        Else
-            SendKeys.Send("{1}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbR0_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR0.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{INSERT}")
-        Else
-            SendKeys.Send("{0}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-
-
-    Private Sub sbRForwardSlash_Click_1(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbRForwardSlash.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{/}")
-        Else
-            SendKeys.Send("{/}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbRMultiply_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbRMultiply.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{*}")
-        Else
-            SendKeys.Send("{*}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbRMinus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbRMinus.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{-}")
-        Else
-            SendKeys.Send("{-}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbRPlus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbRPlus.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{+}")
-        Else
-            SendKeys.Send("{+}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbREquals_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbREquals.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{=}")
-        Else
-            SendKeys.Send("{=}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbRPeriod_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbRPeriod.Click
-
-        Dim keyData As String = ""
-
-        If SHIFT = True And btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-            SendKeys.Send("{.}")
-        Else
-            SendKeys.Send("{.}")
-        End If
-
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub btnscrllk_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnScrollLock.Click
-
-
-        If btnScrollLock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-
-            Call keybd_event(VK_SCROLL, 0, KEYEVENTF_EXTENDEDKEY, 0)
-            Call keybd_event(VK_SCROLL, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-            btnScrollLock.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Else
-
-            If btnScrollLock.Color = LCARS.LCARScolorStyles.PrimaryFunction Then
-                Call keybd_event(VK_SCROLL, 0, KEYEVENTF_EXTENDEDKEY, 0)
-                Call keybd_event(VK_SCROLL, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-                btnScrollLock.Color = LCARS.LCARScolorStyles.SystemFunction
+        End Sub
+
+        Private Sub sbFn2_Click(sender As Object, e As EventArgs) Handles sbFn2.Click
+            If sbFn.Clickable Then
+                My.Settings.FN2Name = UserButtons.txtUBName.Text
+                My.Settings.FN2Path = UserButtons.txtUBLoc.Text
+                sbFn2.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN2Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
             End If
+        End Sub
 
-        End If
-
-
-
-
-    End Sub
-
-    Private Sub btnnumlok_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnnumlock.Click
-
-        If btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then
-
-            Call keybd_event(VK_NUMLOCK, 0, KEYEVENTF_EXTENDEDKEY, 0)
-            Call keybd_event(VK_NUMLOCK, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-            btnnumlock.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Else
-            Call keybd_event(VK_NUMLOCK, 0, KEYEVENTF_EXTENDEDKEY, 0)
-            Call keybd_event(VK_NUMLOCK, 0, KEYEVENTF_EXTENDEDKEY Or KEYEVENTF_KEYUP, 0)
-            btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction
-        End If
-
-        If btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction And SHIFT = True Then
-
-            For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel2.Controls
-                myButton.ButtonText = myButton.Data2
-            Next
-
-        Else
-
-            If btnnumlock.Color = LCARS.LCARScolorStyles.PrimaryFunction And SHIFT = True Then
-
-                For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel2.Controls
-                    myButton.ButtonText = myButton.Data
-                Next
-
+        Private Sub sbFN3_Click(sender As Object, e As EventArgs) Handles sbFN3.Click
+            If sbFn.Clickable Then
+                My.Settings.FN3Name = UserButtons.txtUBName.Text
+                My.Settings.FN3Path = UserButtons.txtUBLoc.Text
+                sbFN3.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN3Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
             End If
-        End If
+        End Sub
 
-    End Sub
+        Private Sub sbFn4_Click(sender As Object, e As EventArgs) Handles sbFn4.Click
+            If sbFn.Clickable Then
+                My.Settings.FN4Name = UserButtons.txtUBName.Text
+                My.Settings.FN4Path = UserButtons.txtUBLoc.Text
+                sbFn4.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN4Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
 
-    Private Sub Timer1_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Timer1.Tick
-        'SCROLL LOCK DETECTION
-        'If scroll lock is on, sets scroll lock button to primary colour.
-        If GetKeyState(Keys.Scroll) = 1 Then
-            If btnScrollLock.Color = LCARS.LCARScolorStyles.SystemFunction Then btnScrollLock.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Else
-            If btnScrollLock.Color = LCARS.LCARScolorStyles.PrimaryFunction Then btnScrollLock.Color = LCARS.LCARScolorStyles.SystemFunction
-        End If
+        Private Sub sbFn5_Click(sender As Object, e As EventArgs) Handles sbFn5.Click
+            If sbFn.Clickable Then
+                My.Settings.FN5Name = UserButtons.txtUBName.Text
+                My.Settings.FN5Path = UserButtons.txtUBLoc.Text
+                sbFn5.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN5Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
 
-        'NUMBERS LOCK DETECTION
-        Dim updateNumLock As Boolean = (IsKeyLocked(Keys.NumLock)) Xor (btnnumlock.Color = LCARS.LCARScolorStyles.PrimaryFunction)
-        'If numbers lock is on, sets numbers lock button to primary colour.
-        If Control.IsKeyLocked(Keys.NumLock) Then
-            If btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction Then btnnumlock.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Else
-            If btnnumlock.Color = LCARS.LCARScolorStyles.PrimaryFunction Then btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction
-        End If
+        Private Sub sbFn6_Click(sender As Object, e As EventArgs) Handles sbFn6.Click
+            If sbFn.Clickable Then
+                My.Settings.FN6Name = UserButtons.txtUBName.Text
+                My.Settings.FN6Path = UserButtons.txtUBLoc.Text
+                sbFn6.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN6Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
 
-        If updateNumLock Then
-            If (btnnumlock.Color = LCARS.LCARScolorStyles.SystemFunction) And SHIFT = True Then
+        Private Sub sbFn7_Click(sender As Object, e As EventArgs) Handles sbFn7.Click
+            If sbFn.Clickable Then
+                My.Settings.FN7Name = UserButtons.txtUBName.Text
+                My.Settings.FN7Path = UserButtons.txtUBLoc.Text
+                sbFn7.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN7Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
 
-                For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel2.Controls
-                    myButton.ButtonText = myButton.Data2
-                Next
-            Else
-                If (btnnumlock.Color = LCARS.LCARScolorStyles.PrimaryFunction) And SHIFT = True Then
-                    For Each myButton As LCARS.LCARSbuttonClass In SplitContainer1.Panel2.Controls
-                        myButton.ButtonText = myButton.Data
-                    Next
+        Private Sub sbFn8_Click(sender As Object, e As EventArgs) Handles sbFn8.Click
+            If sbFn.Clickable Then
+                My.Settings.FN8Name = UserButtons.txtUBName.Text
+                My.Settings.FN8Path = UserButtons.txtUBLoc.Text
+                sbFn8.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN8Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
+
+        Private Sub sbFn9_Click(sender As Object, e As EventArgs) Handles sbFn9.Click
+            If sbFn.Clickable Then
+                My.Settings.FN9Name = UserButtons.txtUBName.Text
+                My.Settings.FN9Path = UserButtons.txtUBLoc.Text
+                sbFn9.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN9Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
+
+        Private Sub sbFn10_Click(sender As Object, e As EventArgs) Handles sbFn10.Click
+            If sbFn.Clickable Then
+                My.Settings.FN10Name = UserButtons.txtUBName.Text
+                My.Settings.FN10Path = UserButtons.txtUBLoc.Text
+                sbFn10.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN10Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
+
+        Private Sub sbFn11_Click(sender As Object, e As EventArgs) Handles sbFn11.Click
+            If sbFn.Clickable Then
+                My.Settings.FN11Name = UserButtons.txtUBName.Text
+                My.Settings.FN11Path = UserButtons.txtUBLoc.Text
+                sbFn11.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN11Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
+
+        Private Sub sbFn12_Click(sender As Object, e As EventArgs) Handles sbFn12.Click
+            If sbFn.Clickable Then
+                My.Settings.FN12Name = UserButtons.txtUBName.Text
+                My.Settings.FN12Path = UserButtons.txtUBLoc.Text
+                sbFn12.Text = UserButtons.txtUBName.Text
+                My.Settings.Save()
+            ElseIf Not UserButtons.Visible Then
+                Try
+                    Interaction.Shell(My.Settings.FN12Path, AppWinStyle.MaximizedFocus)
+                Catch ex As Exception
+                    ProjectData.SetProjectError(ex)
+                    Dim ex2 = ex
+                    Call ProjectData.ClearProjectError()
+                End Try
+            End If
+        End Sub
+
+        Private Sub Arrow_Click(sender As Object, e As EventArgs) Handles abUp.Click, abDown.Click, abLeft.Click, abRight.Click
+            Dim standardButton As StandardButton = New StandardButton()
+            Select Case CType(sender, ArrowButton).ArrowDirection
+                Case LCARSarrowDirection.Up
+                    standardButton.ButtonText = "UP"
+                Case LCARSarrowDirection.Down
+                    standardButton.ButtonText = "DOWN"
+                Case LCARSarrowDirection.Left
+                    standardButton.ButtonText = "LEFT"
+                Case LCARSarrowDirection.Right
+                    standardButton.ButtonText = "RIGHT"
+            End Select
+            StandardKey_Click(standardButton, e)
+        End Sub
+
+        Private Sub sbR9_Click(sender As Object, e As EventArgs) Handles sbR9.Click
+            Dim text = ""
+            Dim flag As Boolean = Nothing
+            If Not flag Then
+                If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                    OskSendKeys("{pgup}")
+                Else
+                    OskSendKeys("{9}")
+                End If
+                If SHIFT Then
+                    Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
                 End If
             End If
-        End If
+        End Sub
 
-        'CAPS LOCK DETECTION
-        'Syncronises the real world keyboard and on screen keyboard caps lock button.
-        If Control.IsKeyLocked(Keys.CapsLock) Then
-            If sbCaps.Color = LCARS.LCARScolorStyles.SystemFunction Then sbCaps.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Else
-            If CAPS = False Then
-                If sbCaps.Color = LCARS.LCARScolorStyles.PrimaryFunction Then sbCaps.Color = LCARS.LCARScolorStyles.SystemFunction
+        Private Sub sbR8_Click(sender As Object, e As EventArgs) Handles sbR8.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{UP}")
+            Else
+                OskSendKeys("{8}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-        'True if the letters should be uppercase, false otherwise
-        Dim newuppercase As Boolean = (sbCaps.Color = LCARS.LCARScolorStyles.PrimaryFunction) Xor (sbLShift.Color = LCARS.LCARScolorStyles.PrimaryFunction)
-        If newuppercase And Not uppercase Then
-            For Each mybutton As LCARS.LCARSbuttonClass In SplitContainer1.Panel1.Controls
-                If mybutton.ButtonText.Length = 1 And Char.IsLetter(mybutton.ButtonText) Then
-                    mybutton.ButtonText = mybutton.Data2
+        Private Sub sbR7_Click(sender As Object, e As EventArgs) Handles sbR7.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{HOME}")
+            Else
+                OskSendKeys("{7}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbR6_Click(sender As Object, e As EventArgs) Handles sbR6.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{RIGHT}")
+            Else
+                OskSendKeys("{6}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbR5_Click(sender As Object, e As EventArgs) Handles sbR5.Click
+            Dim text = ""
+            Dim flag As Boolean = Nothing
+            If Not flag Then
+                If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                    OskSendKeys("{5}")
+                Else
+                    OskSendKeys("{5}")
                 End If
-            Next
-        ElseIf uppercase And Not newuppercase Then
-            For Each mybutton As LCARS.LCARSbuttonClass In SplitContainer1.Panel1.Controls
-                If mybutton.ButtonText.Length = 1 And Char.IsLetter(mybutton.ButtonText) Then
-                    mybutton.ButtonText = mybutton.Data
+                If SHIFT Then
+                    Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
                 End If
-            Next
-        End If
-        uppercase = newuppercase 'Update stored value so we don't redraw unnecessarily
-
-    End Sub
-
-    Private Sub sbA_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbA.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{A}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{A}")
-            Else
-                SendKeys.Send("{a}")
             End If
-        End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbB_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbB.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{B}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{B}")
+        Private Sub sbR4_Click(sender As Object, e As EventArgs) Handles sbR4.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{LEFT}")
             Else
-                SendKeys.Send("{b}")
+                OskSendKeys("{4}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbC_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbC.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{C}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{C}")
+        Private Sub sbR3_Click(sender As Object, e As EventArgs) Handles sbR3.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{pgdn}")
             Else
-                SendKeys.Send("{c}")
+                OskSendKeys("{3}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbD_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbD.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{D}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{D}")
+        Private Sub sbR2_Click(sender As Object, e As EventArgs) Handles sbR2.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{DOWN}")
             Else
-                SendKeys.Send("{d}")
+                OskSendKeys("{2}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbE_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbE.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{E}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{E}")
+        Private Sub sbR1_Click(sender As Object, e As EventArgs) Handles sbR1.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{END}")
             Else
-                SendKeys.Send("{e}")
+                OskSendKeys("{1}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbF_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbF.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{F}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{F}")
+        Private Sub sbR0_Click(sender As Object, e As EventArgs) Handles sbR0.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{INSERT}")
             Else
-                SendKeys.Send("{f}")
+                OskSendKeys("{0}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbG_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbG.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{G}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{G}")
+        Private Sub sbRForwardSlash_Click_1(sender As Object, e As EventArgs) Handles sbRForwardSlash.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{/}")
             Else
-                SendKeys.Send("{g}")
+                OskSendKeys("{/}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbH_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbH.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{H}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{H}")
+        Private Sub sbRMultiply_Click(sender As Object, e As EventArgs) Handles sbRMultiply.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{*}")
             Else
-                SendKeys.Send("{h}")
+                OskSendKeys("{*}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbI_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbI.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{I}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{I}")
+        Private Sub sbRMinus_Click(sender As Object, e As EventArgs) Handles sbRMinus.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{-}")
             Else
-                SendKeys.Send("{i}")
+                OskSendKeys("{-}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbJ_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbJ.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{J}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{J}")
+        Private Sub sbRPlus_Click(sender As Object, e As EventArgs) Handles sbRPlus.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{+}")
             Else
-                SendKeys.Send("{j}")
+                OskSendKeys("{+}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbK_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbK.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{K}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{K}")
+        Private Sub sbREquals_Click(sender As Object, e As EventArgs) Handles sbREquals.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{=}")
             Else
-                SendKeys.Send("{k}")
+                OskSendKeys("{=}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbL_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbL.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{L}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{L}")
+        Private Sub sbRPeriod_Click(sender As Object, e As EventArgs) Handles sbRPeriod.Click
+            Dim text = ""
+            If SHIFT And btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                OskSendKeys("{.}")
             Else
-                SendKeys.Send("{l}")
+                OskSendKeys("{.}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
+        Private Sub btnscrllk_Click(sender As Object, e As EventArgs) Handles btnScrollLock.Click
+            If btnScrollLock.Color = LCARScolorStyles.SystemFunction Then
+                keybd_event(145, 0, 1L, 0L)
+                keybd_event(145, 0, 3L, 0L)
+                btnScrollLock.Color = LCARScolorStyles.PrimaryFunction
+            ElseIf btnScrollLock.Color = LCARScolorStyles.PrimaryFunction Then
+                keybd_event(145, 0, 1L, 0L)
+                keybd_event(145, 0, 3L, 0L)
+                btnScrollLock.Color = LCARScolorStyles.SystemFunction
+            End If
+        End Sub
 
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbM_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbM.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{M}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{M}")
+        Private Sub btnnumlok_Click(sender As Object, e As EventArgs) Handles btnnumlock.Click
+            If btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                keybd_event(144, 0, 1L, 0L)
+                keybd_event(144, 0, 3L, 0L)
+                btnnumlock.Color = LCARScolorStyles.PrimaryFunction
             Else
-                SendKeys.Send("{m}")
+                keybd_event(144, 0, 1L, 0L)
+                keybd_event(144, 0, 3L, 0L)
+                btnnumlock.Color = LCARScolorStyles.SystemFunction
             End If
-        End If
+            Dim enumerator As IEnumerator = Nothing
+            If btnnumlock.Color = LCARScolorStyles.SystemFunction And SHIFT Then
+                Try
+                    enumerator = SplitContainer1.Panel2.Controls.GetEnumerator()
+                    While enumerator.MoveNext()
+                        Dim lCARSbuttonClass = CType(enumerator.Current, LCARSbuttonClass)
+                        lCARSbuttonClass.ButtonText = Conversions.ToString(lCARSbuttonClass.Data2)
+                    End While
+                    Return
+                Finally
+                    If TypeOf enumerator Is IDisposable Then
+                        TryCast(enumerator, IDisposable).Dispose()
+                    End If
+                End Try
+            End If
+            If Not (btnnumlock.Color = LCARScolorStyles.PrimaryFunction And SHIFT) Then
+                Return
+            End If
+            Dim enumerator2 As IEnumerator = Nothing
+            Try
+                enumerator2 = SplitContainer1.Panel2.Controls.GetEnumerator()
+                While enumerator2.MoveNext()
+                    Dim lCARSbuttonClass2 = CType(enumerator2.Current, LCARSbuttonClass)
+                    lCARSbuttonClass2.ButtonText = Conversions.ToString(lCARSbuttonClass2.Data)
+                End While
 
+            Finally
+                If TypeOf enumerator2 Is IDisposable Then
+                    TryCast(enumerator2, IDisposable).Dispose()
+                End If
+            End Try
+        End Sub
 
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
+        Private Sub Timer1_Tick(sender As Object, e As EventArgs) Handles Timer1.Tick
+            TrackInputTarget()
+            If GetKeyState(145L) = 1 Then
+                If btnScrollLock.Color = LCARScolorStyles.SystemFunction Then
+                    btnScrollLock.Color = LCARScolorStyles.PrimaryFunction
+                End If
+            ElseIf btnScrollLock.Color = LCARScolorStyles.PrimaryFunction Then
+                btnScrollLock.Color = LCARScolorStyles.SystemFunction
+            End If
+            Dim flag = IsKeyLocked(Keys.NumLock) Xor btnnumlock.Color = LCARScolorStyles.PrimaryFunction
+            If IsKeyLocked(Keys.NumLock) Then
+                If btnnumlock.Color = LCARScolorStyles.SystemFunction Then
+                    btnnumlock.Color = LCARScolorStyles.PrimaryFunction
+                End If
+            ElseIf btnnumlock.Color = LCARScolorStyles.PrimaryFunction Then
+                btnnumlock.Color = LCARScolorStyles.SystemFunction
+            End If
+            If flag Then
+                If btnnumlock.Color = LCARScolorStyles.SystemFunction And SHIFT Then
+                    Dim enumerator As IEnumerator = Nothing
+                    Try
+                        enumerator = SplitContainer1.Panel2.Controls.GetEnumerator()
+                        While enumerator.MoveNext()
+                            Dim lCARSbuttonClass = CType(enumerator.Current, LCARSbuttonClass)
+                            lCARSbuttonClass.ButtonText = Conversions.ToString(lCARSbuttonClass.Data2)
+                        End While
 
-    End Sub
+                    Finally
+                        If TypeOf enumerator Is IDisposable Then
+                            TryCast(enumerator, IDisposable).Dispose()
+                        End If
+                    End Try
+                ElseIf btnnumlock.Color = LCARScolorStyles.PrimaryFunction And SHIFT Then
+                    Dim enumerator2 As IEnumerator = Nothing
+                    Try
+                        enumerator2 = SplitContainer1.Panel2.Controls.GetEnumerator()
+                        While enumerator2.MoveNext()
+                            Dim lCARSbuttonClass2 = CType(enumerator2.Current, LCARSbuttonClass)
+                            lCARSbuttonClass2.ButtonText = Conversions.ToString(lCARSbuttonClass2.Data)
+                        End While
 
-    Private Sub sbN_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbN.Click
+                    Finally
+                        If TypeOf enumerator2 Is IDisposable Then
+                            TryCast(enumerator2, IDisposable).Dispose()
+                        End If
+                    End Try
+                End If
+            End If
+            If IsKeyLocked(Keys.Capital) Then
+                If sbCaps.Color = LCARScolorStyles.SystemFunction Then
+                    sbCaps.Color = LCARScolorStyles.PrimaryFunction
+                End If
+            ElseIf Not CAPS AndAlso sbCaps.Color = LCARScolorStyles.PrimaryFunction Then
+                sbCaps.Color = LCARScolorStyles.SystemFunction
+            End If
+            Dim flag2 = sbCaps.Color = LCARScolorStyles.PrimaryFunction Xor sbLShift.Color = LCARScolorStyles.PrimaryFunction
+            If flag2 And Not uppercase Then
+                Dim enumerator3 As IEnumerator = Nothing
+                Try
+                    enumerator3 = SplitContainer1.Panel1.Controls.GetEnumerator()
+                    While enumerator3.MoveNext()
+                        Dim lCARSbuttonClass3 = CType(enumerator3.Current, LCARSbuttonClass)
+                        If lCARSbuttonClass3.ButtonText.Length = 1 And Char.IsLetter(Conversions.ToChar(lCARSbuttonClass3.ButtonText)) Then
+                            lCARSbuttonClass3.ButtonText = Conversions.ToString(lCARSbuttonClass3.Data2)
+                        End If
+                    End While
 
-        Dim keydata As String = ""
+                Finally
+                    If TypeOf enumerator3 Is IDisposable Then
+                        TryCast(enumerator3, IDisposable).Dispose()
+                    End If
+                End Try
+            ElseIf uppercase AndAlso Not flag2 Then
+                Dim enumerator4 As IEnumerator = Nothing
+                Try
+                    enumerator4 = SplitContainer1.Panel1.Controls.GetEnumerator()
+                    While enumerator4.MoveNext()
+                        Dim lCARSbuttonClass4 = CType(enumerator4.Current, LCARSbuttonClass)
+                        If lCARSbuttonClass4.ButtonText.Length = 1 And Char.IsLetter(Conversions.ToChar(lCARSbuttonClass4.ButtonText)) Then
+                            lCARSbuttonClass4.ButtonText = Conversions.ToString(lCARSbuttonClass4.Data)
+                        End If
+                    End While
 
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{N}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{N}")
+                Finally
+                    If TypeOf enumerator4 Is IDisposable Then
+                        TryCast(enumerator4, IDisposable).Dispose()
+                    End If
+                End Try
+            End If
+            uppercase = flag2
+        End Sub
+
+        Private Sub sbA_Click(sender As Object, e As EventArgs) Handles sbA.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{A}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{A}")
             Else
-                SendKeys.Send("{n}")
+                OskSendKeys("{a}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbO_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbO.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{O}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{O}")
+        Private Sub sbB_Click(sender As Object, e As EventArgs) Handles sbB.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{B}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{B}")
             Else
-                SendKeys.Send("{o}")
+                OskSendKeys("{b}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbP_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbP.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{P}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{P}")
+        Private Sub sbC_Click(sender As Object, e As EventArgs) Handles sbC.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{C}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{C}")
             Else
-                SendKeys.Send("{p}")
+                OskSendKeys("{c}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbQ_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbQ.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{Q}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{Q}")
+        Private Sub sbD_Click(sender As Object, e As EventArgs) Handles sbD.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{D}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{D}")
             Else
-                SendKeys.Send("{q}")
+                OskSendKeys("{d}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbR_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbR.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{R}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{R}")
+        Private Sub sbE_Click(sender As Object, e As EventArgs) Handles sbE.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{E}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{E}")
             Else
-                SendKeys.Send("{r}")
+                OskSendKeys("{e}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbS_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbS.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{S}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{S}")
+        Private Sub sbF_Click(sender As Object, e As EventArgs) Handles sbF.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{F}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{F}")
             Else
-                SendKeys.Send("{s}")
+                OskSendKeys("{f}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbT_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbT.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{T}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{T}")
+        Private Sub sbG_Click(sender As Object, e As EventArgs) Handles sbG.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{G}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{G}")
             Else
-                SendKeys.Send("{t}")
+                OskSendKeys("{g}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbU_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbU.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{U}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{U}")
+        Private Sub sbH_Click(sender As Object, e As EventArgs) Handles sbH.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{H}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{H}")
             Else
-                SendKeys.Send("{u}")
+                OskSendKeys("{h}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbV_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbV.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{V}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{V}")
+        Private Sub sbI_Click(sender As Object, e As EventArgs) Handles sbI.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{I}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{I}")
             Else
-                SendKeys.Send("{v}")
+                OskSendKeys("{i}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbW_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbW.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{W}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{W}")
+        Private Sub sbJ_Click(sender As Object, e As EventArgs) Handles sbJ.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{J}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{J}")
             Else
-                SendKeys.Send("{w}")
+                OskSendKeys("{j}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbX_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbX.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{X}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{X}")
+        Private Sub sbK_Click(sender As Object, e As EventArgs) Handles sbK.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{K}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{K}")
             Else
-                SendKeys.Send("{x}")
+                OskSendKeys("{k}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbY_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbY.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{Y}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{Y}")
+        Private Sub sbL_Click(sender As Object, e As EventArgs) Handles sbL.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{L}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{L}")
             Else
-                SendKeys.Send("{y}")
+                OskSendKeys("{l}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
-
-    End Sub
-
-    Private Sub sbZ_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbZ.Click
-
-        Dim keydata As String = ""
-
-        If CAPS = True And SHIFT = False Then
-            SendKeys.Send("{Z}")
-        Else
-            If CAPS = False And SHIFT = True Then
-                SendKeys.Send("{Z}")
+        Private Sub sbM_Click(sender As Object, e As EventArgs) Handles sbM.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{M}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{M}")
             Else
-                SendKeys.Send("{z}")
+                OskSendKeys("{m}")
             End If
-        End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
+        Private Sub sbN_Click(sender As Object, e As EventArgs) Handles sbN.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{N}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{N}")
+            Else
+                OskSendKeys("{n}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-        If SHIFT = True Then
-            Shift_Click(sender, e)
-        End If
+        Private Sub sbO_Click(sender As Object, e As EventArgs) Handles sbO.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{O}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{O}")
+            Else
+                OskSendKeys("{o}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-    End Sub
+        Private Sub sbP_Click(sender As Object, e As EventArgs) Handles sbP.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{P}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{P}")
+            Else
+                OskSendKeys("{p}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
+        Private Sub sbQ_Click(sender As Object, e As EventArgs) Handles sbQ.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{Q}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{Q}")
+            Else
+                OskSendKeys("{q}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-    Private Sub Timer2_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Timer2.Tick
+        Private Sub sbR_Click(sender As Object, e As EventArgs) Handles sbR.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{R}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{R}")
+            Else
+                OskSendKeys("{r}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
 
-        If sbRAlt.Color = LCARS.LCARScolorStyles.PrimaryFunction Then
-            Alt_Click(sender, e)
-        End If
-        Timer2.Enabled = False
-    End Sub
-End Class
+        Private Sub sbS_Click(sender As Object, e As EventArgs) Handles sbS.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{S}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{S}")
+            Else
+                OskSendKeys("{s}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbT_Click(sender As Object, e As EventArgs) Handles sbT.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{T}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{T}")
+            Else
+                OskSendKeys("{t}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbU_Click(sender As Object, e As EventArgs) Handles sbU.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{U}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{U}")
+            Else
+                OskSendKeys("{u}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbV_Click(sender As Object, e As EventArgs) Handles sbV.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{V}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{V}")
+            Else
+                OskSendKeys("{v}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbW_Click(sender As Object, e As EventArgs) Handles sbW.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{W}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{W}")
+            Else
+                OskSendKeys("{w}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbX_Click(sender As Object, e As EventArgs) Handles sbX.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{X}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{X}")
+            Else
+                OskSendKeys("{x}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbY_Click(sender As Object, e As EventArgs) Handles sbY.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{Y}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{Y}")
+            Else
+                OskSendKeys("{y}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub sbZ_Click(sender As Object, e As EventArgs) Handles sbZ.Click
+            Dim text = ""
+            If CAPS And Not SHIFT Then
+                OskSendKeys("{Z}")
+            ElseIf Not CAPS And SHIFT Then
+                OskSendKeys("{Z}")
+            Else
+                OskSendKeys("{z}")
+            End If
+            If SHIFT Then
+                Shift_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+        End Sub
+
+        Private Sub Timer2_Tick(sender As Object, e As EventArgs) Handles Timer2.Tick
+            If sbRAlt.Color = LCARScolorStyles.PrimaryFunction Then
+                Alt_Click(RuntimeHelpers.GetObjectValue(sender), e)
+            End If
+            Timer2.Enabled = False
+        End Sub
+
+    End Class
+
+' TODO: Error SkippedTokensTrivia '}'
+

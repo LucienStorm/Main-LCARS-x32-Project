@@ -1,5 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -20,6 +23,8 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <ApplicationManifest>My Project\app.manifest</ApplicationManifest>
     <OptionStrict>Off</OptionStrict>
+    <!-- CLR 4 required: Interop.SpeechLib / IWsh from modern tlbimp are v4 assemblies -->
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -170,7 +175,10 @@
     <Compile Include="Interfaces\IAutohide.vb" />
     <Compile Include="Interfaces\IMainScreen.vb" />
     <Compile Include="Modules\CommonScreen.vb" />
-    <Compile Include="Modules\keyboard.vb" />
+    <!-- Excluded: unused low-level keyboard hook module. SetWindowsHookEx/GetAsyncKeyState
+         in a shell EXE is a strong Defender heuristic signal (e.g. Prowloc.A!cl). Hooks for
+         the lock screen live in LCARSLock, which actually calls them. -->
+    <!-- <Compile Include="Modules\keyboard.vb" /> -->
     <Compile Include="Forms\Main screens\frmMainscreen2.Designer.vb">
       <DependentUpon>frmMainscreen2.vb</DependentUpon>
     </Compile>
@@ -179,10 +187,17 @@
     </Compile>
     <Compile Include="Modules\modAlerts.vb" />
     <Compile Include="Modules\modAnimate.vb" />
+    <Compile Include="Modules\modDiagnostics.vb" />
     <Compile Include="Modules\modBusiness.vb" />
     <Compile Include="Modules\modCommon.vb" />
+    <Compile Include="Modules\modShellFallback.vb" />
     <Compile Include="Modules\modSpeech.vb" />
+    <Compile Include="Forms\frmQuickControls.vb" />
+    <Compile Include="Modules\modHudWeather.vb" />
+    <Compile Include="Modules\modQuickControls.vb" />
     <Compile Include="Modules\modTray.vb" />
+    <Compile Include="Modules\modUpdateStaging.vb" />
+    <Compile Include="Modules\modWebView2Runtime.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>
@@ -200,6 +215,7 @@
     </Compile>
     <Compile Include="Modules\MSIparser.vb" />
     <Compile Include="Modules\programList.vb" />
+    <Compile Include="Modules\StartMenuLayout.vb" />
     <Compile Include="ShellIntegration\GlobalAtom.vb" />
     <Compile Include="ShellIntegration\INIReader.vb" />
     <Compile Include="ShellIntegration\KnownFolderPaths.vb" />
@@ -283,6 +299,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <None Include="app.config" />
     <None Include="Resources\federation-logo.jpg" />
   </ItemGroup>
   <ItemGroup>
@@ -424,11 +441,7 @@
     </ItemGroup>
   </Target>
   <PropertyGroup>
-    <PostBuildEvent>call "$(DevEnvDir)..\..\VC\bin\vcvars32.bat"
-
-call "$(DevEnvDir)..\..\VC\bin\editbin.exe" /NXCOMPAT:NO "$(TargetPath)"
-
-</PostBuildEvent>
+    <PostBuildEvent></PostBuildEvent>
     <PreBuildEvent>
     </PreBuildEvent>
   </PropertyGroup>

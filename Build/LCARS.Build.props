@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    Points legacy LCARS projects at the .NET 4.8.1 SDK tools on a typical Win10 dev PC.
+    Override on the command line if your SDK lives elsewhere:
+      /p:LcarsSdkToolsPath="D:\path\to\NETFX 4.8.1 Tools\"
+  -->
+  <PropertyGroup>
+    <LcarsSdkToolsPath Condition="'$(LcarsSdkToolsPath)' == ''">C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8.1 Tools\</LcarsSdkToolsPath>
+    <ResgenToolPath Condition="'$(ResgenToolPath)' == ''">$(LcarsSdkToolsPath)</ResgenToolPath>
+    <SDK40ToolsPath Condition="'$(SDK40ToolsPath)' == ''">$(LcarsSdkToolsPath)</SDK40ToolsPath>
+    <!--
+      Default for most legacy LCARS projects. LCARSmain overrides to v4.0 because
+      modern MSBuild generates SpeechLib/IWsh COM interops as CLR 4 assemblies,
+      which a v3.5 (CLR 2) host cannot load (BadImageFormatException on startup).
+    -->
+    <TargetFrameworkVersion Condition="'$(TargetFrameworkVersion)' == ''">v3.5</TargetFrameworkVersion>
+  </PropertyGroup>
+</Project>

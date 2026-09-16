@@ -285,7 +285,7 @@ Module modSpeech
     End Sub
     Private Sub doStardate(ByVal result As ISpeechRecoResult)
         Try
-            vox.Speak(LCARS.Stardate.getStardate(Now).ToString("F1"))
+            vox.Speak(LCARS.ClockDisplay.FormatForSpeech(Now))
         Catch ex As Exception
         End Try
     End Sub

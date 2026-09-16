@@ -125,9 +125,39 @@ Public Module programList
         If element IsNot Nothing Then
             mergeDirs(globalItems, element)
         End If
+
+        ' Broader scan: full Start Menu trees + local Start Menu Programs (covers items
+        ' that never land under classic Programs, and per-user LocalAppData installs).
+        TryMergeProgramsPath(globalItems, Environment.GetFolderPath(Environment.SpecialFolder.StartMenu))
+        TryMergeProgramsPath(globalItems, Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu))
+        Try
+            Dim localStart As String = Path.Combine( _
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), _
+                "Microsoft\Windows\Start Menu\Programs")
+            TryMergeProgramsPath(globalItems, localStart)
+        Catch
+        End Try
+        Try
+            Dim commonStart As String = Path.Combine( _
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), _
+                "Microsoft\Windows\Start Menu\Programs")
+            TryMergeProgramsPath(globalItems, commonStart)
+        Catch
+        End Try
+
         element = globalItems
         Return element
     End Function
+
+    Private Sub TryMergeProgramsPath(ByVal into As DirectoryStartItem, ByVal path As String)
+        If into Is Nothing OrElse String.IsNullOrEmpty(path) Then Return
+        If Not Directory.Exists(path) Then Return
+        Try
+            Dim extra As DirectoryStartItem = GetPrograms(path)
+            If extra IsNot Nothing Then mergeDirs(into, extra)
+        Catch
+        End Try
+    End Sub
 
 
     Private Function GetPrograms(ByVal path As String) As DirectoryStartItem

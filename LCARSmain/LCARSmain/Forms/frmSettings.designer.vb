@@ -59,7 +59,12 @@ Partial Class frmSettings
         Me.fbChangeSound = New LCARS.Controls.FlatButton
         Me.txtSoundPath = New System.Windows.Forms.Label
         Me.LcarsTabPage2 = New LCARS.Controls.x32TabPage
-        Me.tglDates = New LCARS.Controls.ToggleButton
+        Me.hpModern24h = New LCARS.Controls.HalfPillButton
+        Me.hpModernFractional = New LCARS.Controls.HalfPillButton
+        Me.hpClockModern = New LCARS.Controls.HalfPillButton
+        Me.hpClockTNG = New LCARS.Controls.HalfPillButton
+        Me.hpClockEarth = New LCARS.Controls.HalfPillButton
+        Me.lblClockMode = New System.Windows.Forms.Label
         Me.Label3 = New System.Windows.Forms.Label
         Me.sbUseScheme = New LCARS.Controls.StandardButton
         Me.Label2 = New System.Windows.Forms.Label
@@ -173,16 +178,16 @@ Partial Class frmSettings
         '
         'sbExitMyComp
         '
-        Me.sbExitMyComp.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.sbExitMyComp.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
-        Me.sbExitMyComp.ButtonText = "X"
+        Me.sbExitMyComp.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.sbExitMyComp.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
+        Me.sbExitMyComp.ButtonText = "CLOSE"
         Me.sbExitMyComp.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.sbExitMyComp.Color = LCARS.LCARScolorStyles.FunctionOffline
-        Me.sbExitMyComp.Location = New System.Drawing.Point(765, 4)
+        Me.sbExitMyComp.Location = New System.Drawing.Point(692, 564)
         Me.sbExitMyComp.Name = "sbExitMyComp"
-        Me.sbExitMyComp.Size = New System.Drawing.Size(33, 32)
+        Me.sbExitMyComp.Size = New System.Drawing.Size(100, 28)
         Me.sbExitMyComp.TabIndex = 57
-        Me.sbExitMyComp.Text = "X"
+        Me.sbExitMyComp.Text = "CLOSE"
         '
         'ltcSettings
         '
@@ -660,7 +665,12 @@ Partial Class frmSettings
                     Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.LcarsTabPage2.BackColor = System.Drawing.Color.Black
         Me.LcarsTabPage2.Color = LCARS.LCARScolorStyles.MiscFunction
-        Me.LcarsTabPage2.Controls.Add(Me.tglDates)
+        Me.LcarsTabPage2.Controls.Add(Me.hpModern24h)
+        Me.LcarsTabPage2.Controls.Add(Me.hpModernFractional)
+        Me.LcarsTabPage2.Controls.Add(Me.hpClockModern)
+        Me.LcarsTabPage2.Controls.Add(Me.hpClockTNG)
+        Me.LcarsTabPage2.Controls.Add(Me.hpClockEarth)
+        Me.LcarsTabPage2.Controls.Add(Me.lblClockMode)
         Me.LcarsTabPage2.Controls.Add(Me.Label3)
         Me.LcarsTabPage2.Controls.Add(Me.sbUseScheme)
         Me.LcarsTabPage2.Controls.Add(Me.Label2)
@@ -672,16 +682,73 @@ Partial Class frmSettings
         Me.LcarsTabPage2.TabIndex = 5
         Me.LcarsTabPage2.Text = "APPEARANCE"
         '
-        'tglDates
+        'hpModern24h
         '
-        Me.tglDates.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
-        Me.tglDates.ButtonText = "USE STARDATE"
-        Me.tglDates.Location = New System.Drawing.Point(28, 473)
-        Me.tglDates.Name = "tglDates"
-        Me.tglDates.SideText = "On"
-        Me.tglDates.Size = New System.Drawing.Size(200, 34)
-        Me.tglDates.TabIndex = 31
-        Me.tglDates.Text = "USE STARDATE"
+        Me.hpModern24h.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.hpModern24h.ButtonText = "24H"
+        Me.hpModern24h.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleLeft
+        Me.hpModern24h.Location = New System.Drawing.Point(454, 473)
+        Me.hpModern24h.Name = "hpModern24h"
+        Me.hpModern24h.Size = New System.Drawing.Size(90, 34)
+        Me.hpModern24h.TabIndex = 36
+        Me.hpModern24h.Text = "24H"
+        Me.hpModern24h.Visible = False
+        '
+        'hpModernFractional
+        '
+        Me.hpModernFractional.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.hpModernFractional.ButtonText = "FRACTIONAL"
+        Me.hpModernFractional.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleLeft
+        Me.hpModernFractional.Location = New System.Drawing.Point(346, 473)
+        Me.hpModernFractional.Name = "hpModernFractional"
+        Me.hpModernFractional.Size = New System.Drawing.Size(100, 34)
+        Me.hpModernFractional.TabIndex = 35
+        Me.hpModernFractional.Text = "FRACTIONAL"
+        Me.hpModernFractional.Visible = False
+        '
+        'hpClockModern
+        '
+        Me.hpClockModern.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.hpClockModern.ButtonText = "MODERN"
+        Me.hpClockModern.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleLeft
+        Me.hpClockModern.Location = New System.Drawing.Point(236, 473)
+        Me.hpClockModern.Name = "hpClockModern"
+        Me.hpClockModern.Size = New System.Drawing.Size(100, 34)
+        Me.hpClockModern.TabIndex = 34
+        Me.hpClockModern.Text = "MODERN"
+        '
+        'hpClockTNG
+        '
+        Me.hpClockTNG.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.hpClockTNG.ButtonText = "TNG"
+        Me.hpClockTNG.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleLeft
+        Me.hpClockTNG.Location = New System.Drawing.Point(132, 473)
+        Me.hpClockTNG.Name = "hpClockTNG"
+        Me.hpClockTNG.Size = New System.Drawing.Size(90, 34)
+        Me.hpClockTNG.TabIndex = 33
+        Me.hpClockTNG.Text = "TNG"
+        '
+        'hpClockEarth
+        '
+        Me.hpClockEarth.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.hpClockEarth.ButtonText = "EARTH"
+        Me.hpClockEarth.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleLeft
+        Me.hpClockEarth.Location = New System.Drawing.Point(28, 473)
+        Me.hpClockEarth.Name = "hpClockEarth"
+        Me.hpClockEarth.Size = New System.Drawing.Size(90, 34)
+        Me.hpClockEarth.TabIndex = 32
+        Me.hpClockEarth.Text = "EARTH"
+        '
+        'lblClockMode
+        '
+        Me.lblClockMode.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.lblClockMode.Font = New System.Drawing.Font("LCARS", 18.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.lblClockMode.ForeColor = System.Drawing.Color.Orange
+        Me.lblClockMode.Location = New System.Drawing.Point(28, 440)
+        Me.lblClockMode.Name = "lblClockMode"
+        Me.lblClockMode.Size = New System.Drawing.Size(300, 28)
+        Me.lblClockMode.TabIndex = 31
+        Me.lblClockMode.Text = "CLOCK MODE"
         '
         'Label3
         '
@@ -699,7 +766,7 @@ Partial Class frmSettings
         Me.sbUseScheme.ButtonText = "USE SCHEME"
         Me.sbUseScheme.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.sbUseScheme.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Me.sbUseScheme.Location = New System.Drawing.Point(223, 427)
+        Me.sbUseScheme.Location = New System.Drawing.Point(223, 404)
         Me.sbUseScheme.Name = "sbUseScheme"
         Me.sbUseScheme.Size = New System.Drawing.Size(110, 28)
         Me.sbUseScheme.TabIndex = 29
@@ -1455,7 +1522,7 @@ Partial Class frmSettings
         Me.fbChannelDot.ButtonText = ""
         Me.fbChannelDot.Clickable = False
         Me.fbChannelDot.Color = LCARS.LCARScolorStyles.CriticalFunction
-        Me.fbChannelDot.Location = New System.Drawing.Point(274, 65)
+        Me.fbChannelDot.Location = New System.Drawing.Point(274, 88)
         Me.fbChannelDot.Name = "fbChannelDot"
         Me.fbChannelDot.Size = New System.Drawing.Size(31, 31)
         Me.fbChannelDot.TabIndex = 10
@@ -1466,7 +1533,7 @@ Partial Class frmSettings
         Me.txtCustom.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
         Me.txtCustom.Font = New System.Drawing.Font("LCARS", 15.75!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.txtCustom.ForeColor = System.Drawing.Color.Orange
-        Me.txtCustom.Location = New System.Drawing.Point(309, 176)
+        Me.txtCustom.Location = New System.Drawing.Point(309, 199)
         Me.txtCustom.Name = "txtCustom"
         Me.txtCustom.Size = New System.Drawing.Size(339, 31)
         Me.txtCustom.TabIndex = 9
@@ -1477,7 +1544,7 @@ Partial Class frmSettings
         '
         Me.hpCustom.ButtonText = "CUSTOM"
         Me.hpCustom.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleLeft
-        Me.hpCustom.Location = New System.Drawing.Point(309, 139)
+        Me.hpCustom.Location = New System.Drawing.Point(309, 162)
         Me.hpCustom.Name = "hpCustom"
         Me.hpCustom.Size = New System.Drawing.Size(134, 31)
         Me.hpCustom.TabIndex = 8
@@ -1487,7 +1554,7 @@ Partial Class frmSettings
         '
         Me.hpExperimental.ButtonText = "EXPERIMENTAL"
         Me.hpExperimental.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleLeft
-        Me.hpExperimental.Location = New System.Drawing.Point(309, 102)
+        Me.hpExperimental.Location = New System.Drawing.Point(309, 125)
         Me.hpExperimental.Name = "hpExperimental"
         Me.hpExperimental.Size = New System.Drawing.Size(134, 31)
         Me.hpExperimental.TabIndex = 8
@@ -1497,7 +1564,7 @@ Partial Class frmSettings
         '
         Me.hpRelease.ButtonText = "RELEASE"
         Me.hpRelease.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleLeft
-        Me.hpRelease.Location = New System.Drawing.Point(309, 65)
+        Me.hpRelease.Location = New System.Drawing.Point(309, 88)
         Me.hpRelease.Name = "hpRelease"
         Me.hpRelease.Size = New System.Drawing.Size(134, 31)
         Me.hpRelease.TabIndex = 8
@@ -1508,7 +1575,7 @@ Partial Class frmSettings
         Me.sbCheck.ButtonText = "MANUAL CHECK"
         Me.sbCheck.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.sbCheck.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        Me.sbCheck.Location = New System.Drawing.Point(5, 102)
+        Me.sbCheck.Location = New System.Drawing.Point(5, 125)
         Me.sbCheck.Name = "sbCheck"
         Me.sbCheck.Size = New System.Drawing.Size(194, 31)
         Me.sbCheck.TabIndex = 7
@@ -1518,7 +1585,7 @@ Partial Class frmSettings
         '
         Me.tglAutoUpdates.ButtonText = "AUTOMATIC UPDATES"
         Me.tglAutoUpdates.Lit = False
-        Me.tglAutoUpdates.Location = New System.Drawing.Point(6, 65)
+        Me.tglAutoUpdates.Location = New System.Drawing.Point(6, 88)
         Me.tglAutoUpdates.Name = "tglAutoUpdates"
         Me.tglAutoUpdates.SideText = "OFF"
         Me.tglAutoUpdates.Size = New System.Drawing.Size(200, 31)
@@ -1533,7 +1600,7 @@ Partial Class frmSettings
         Me.Label19.AutoSize = True
         Me.Label19.Font = New System.Drawing.Font("LCARS", 18.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.Label19.ForeColor = System.Drawing.Color.Orange
-        Me.Label19.Location = New System.Drawing.Point(252, 24)
+        Me.Label19.Location = New System.Drawing.Point(260, 2)
         Me.Label19.Name = "Label19"
         Me.Label19.Size = New System.Drawing.Size(101, 28)
         Me.Label19.TabIndex = 5
@@ -1543,14 +1610,14 @@ Partial Class frmSettings
         '
         Me.lblVersion.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Left) _
                     Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.lblVersion.AutoSize = True
-        Me.lblVersion.Font = New System.Drawing.Font("LCARS", 18.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.lblVersion.AutoSize = False
+        Me.lblVersion.Font = New System.Drawing.Font("LCARS", 16.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.lblVersion.ForeColor = System.Drawing.Color.Orange
-        Me.lblVersion.Location = New System.Drawing.Point(-2, 24)
+        Me.lblVersion.Location = New System.Drawing.Point(6, 2)
         Me.lblVersion.Name = "lblVersion"
-        Me.lblVersion.Size = New System.Drawing.Size(171, 28)
+        Me.lblVersion.Size = New System.Drawing.Size(248, 52)
         Me.lblVersion.TabIndex = 5
-        Me.lblVersion.Text = "Program Version: 3-31-11"
+        Me.lblVersion.Text = "Program Version:"
         '
         'tabExperimental
         '
@@ -1739,7 +1806,12 @@ Partial Class frmSettings
     Friend WithEvents LcarsTabPage3 As LCARS.Controls.x32TabPage
     Friend WithEvents LcarsTabPage5 As LCARS.Controls.x32TabPage
     Friend WithEvents tbTitle As LCARS.Controls.TextButton
-    Friend WithEvents tglDates As LCARS.Controls.ToggleButton
+    Friend WithEvents lblClockMode As System.Windows.Forms.Label
+    Friend WithEvents hpClockEarth As LCARS.Controls.HalfPillButton
+    Friend WithEvents hpClockTNG As LCARS.Controls.HalfPillButton
+    Friend WithEvents hpClockModern As LCARS.Controls.HalfPillButton
+    Friend WithEvents hpModernFractional As LCARS.Controls.HalfPillButton
+    Friend WithEvents hpModern24h As LCARS.Controls.HalfPillButton
     Friend WithEvents fbChangeSound As LCARS.Controls.FlatButton
     Friend WithEvents tabAbout As LCARS.Controls.x32TabPage
     Friend WithEvents lblAbout As System.Windows.Forms.Label

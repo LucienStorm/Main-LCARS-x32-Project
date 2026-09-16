@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 ''' <summary>
 ''' Contains methods for reading and modifying a version definition file.
 ''' </summary>
@@ -21,14 +21,24 @@ Public Class ProgramVersions
         loadFile(filePath)
     End Sub
 
-    Private Sub loadFile(ByVal file As String)
-        myFilePath = file
-        Using myReader As New StreamReader(file)
-            myGlobalVersion = myReader.ReadLine()
+    Private Sub loadFile(ByVal filePath As String)
+        myFilePath = filePath
+        If Not System.IO.File.Exists(filePath) Then
+            myGlobalVersion = "0.0.0.0"
+            Return
+        End If
+        Using myReader As New StreamReader(filePath)
+            Dim firstLine As String = myReader.ReadLine()
+            myGlobalVersion = If(firstLine, "0.0.0.0")
             While myReader.Peek() <> -1
+                Dim componentName As String = myReader.ReadLine()
+                Dim componentVersion As String = myReader.ReadLine()
+                If String.IsNullOrEmpty(componentName) Then
+                    Exit While
+                End If
                 Dim myComponent As New ComponentVersion
-                myComponent.ComponentName = myReader.ReadLine()
-                myComponent.ComponentVersion = myReader.ReadLine()
+                myComponent.ComponentName = componentName
+                myComponent.ComponentVersion = If(componentVersion, "")
                 myVersionList.Add(myComponent)
             End While
         End Using

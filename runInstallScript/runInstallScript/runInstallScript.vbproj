@@ -1,5 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="3.5" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -87,6 +90,8 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
     <Compile Include="ProgramVersions.vb" />
+    <Compile Include="ShellFallback.vb" />
+    <Compile Include="EarlyLog.vb" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Class1.resx">

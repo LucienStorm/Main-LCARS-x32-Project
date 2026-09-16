@@ -60,11 +60,7 @@ Public Class frmProperties
             lblFolderPathValue.Text = path
             lblFolderSizeValue.Text = ToDriveSize(DirSize(New System.IO.DirectoryInfo(path)))
             Dim createTime As DateTime = System.IO.Directory.GetCreationTime(path)
-            If CBool(GetSetting("LCARS x32", "Application", "Stardate", "FALSE")) Then
-                lblFolderCreatedValue.Text = LCARS.Stardate.getStardate(createTime).ToString()
-            Else
-                lblFolderCreatedValue.Text = createTime.ToString()
-            End If
+            lblFolderCreatedValue.Text = LCARS.ClockDisplay.FormatDateTime(createTime)
             lblContainsValue.Text = System.IO.Directory.GetDirectories(path).Length & " directories, " & System.IO.Directory.GetFiles(path).Length & " files"
         Catch ex As Exception
             lblFolderSizeValue.Text = "N/A"
@@ -79,15 +75,9 @@ Public Class frmProperties
             lblPathValue.Text = path
             Dim size As Long = My.Computer.FileSystem.GetFileInfo(path).Length()
             lblSizeValue.Text = ToDriveSize(size)
-            If (GetSetting("LCARS x32", "Application", "Stardate", "FALSE") <> "TRUE") Then
-                lblCreatedValue.Text = System.IO.File.GetCreationTime(path).ToString("g")
-                lblModifiedValue.Text = System.IO.File.GetLastWriteTime(path).ToString("g")
-                lblAccessedValue.Text = System.IO.File.GetLastAccessTime(path).ToString("g")
-            Else
-                lblCreatedValue.Text = LCARS.Stardate.getStardate(System.IO.File.GetCreationTime(path)).ToString()
-                lblModifiedValue.Text = LCARS.Stardate.getStardate(System.IO.File.GetLastWriteTime(path)).ToString()
-                lblAccessedValue.Text = LCARS.Stardate.getStardate(System.IO.File.GetLastAccessTime(path)).ToString()
-            End If
+            lblCreatedValue.Text = LCARS.ClockDisplay.FormatDateTime(System.IO.File.GetCreationTime(path))
+            lblModifiedValue.Text = LCARS.ClockDisplay.FormatDateTime(System.IO.File.GetLastWriteTime(path))
+            lblAccessedValue.Text = LCARS.ClockDisplay.FormatDateTime(System.IO.File.GetLastAccessTime(path))
             'finding what it opens with
             lblOpensWithValue.Text = GetTypeOpenWith(System.IO.Path.GetExtension(path))
             sbChangeProgram.Visible = String.IsNullOrEmpty(lblOpensWithValue.Text)

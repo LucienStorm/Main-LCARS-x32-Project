@@ -1,15 +1,36 @@
-﻿Public Class Resize_Keypad
+Public Class Resize_Keypad
 
     'required for drag option
     Dim drag As Boolean
     Dim mousex As Integer
     Dim mousey As Integer
 
+    ' Always drive the OSK that owns this keypad — never a stray default instance.
+    Private ReadOnly Property HostKeyboard As frmKeyboard
+        Get
+            Dim owned As frmKeyboard = TryCast(Me.Owner, frmKeyboard)
+            If owned IsNot Nothing Then Return owned
+            Return frmKeyboard
+        End Get
+    End Property
+
     Private Sub Resize_Keypad_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+        Me.TopMost = True
 
         'Sets the resize panel to the last location chosen by user
-        Me.Location = My.Settings.Resize_KeypadPosition
+        Dim saved As Point = My.Settings.Resize_KeypadPosition
+        Dim host As frmKeyboard = HostKeyboard
+        Dim scr As Screen = Screen.FromPoint(If(host IsNot Nothing, host.Location, Cursor.Position))
+        Const menuClearance As Integer = 110
+        If saved.IsEmpty OrElse saved.Y < scr.Bounds.Top + menuClearance OrElse
+           saved.X < scr.Bounds.Left OrElse saved.X > scr.Bounds.Right - 50 Then
+            Me.Left = scr.Bounds.Left + (scr.Bounds.Width - Me.Width) \ 2
+            Me.Top = scr.Bounds.Top + menuClearance
+        Else
+            Me.Location = saved
+        End If
 
+        Me.BringToFront()
     End Sub
 
 
@@ -17,7 +38,7 @@
 
         'Sets the resize panel to the last location chosen by user
         My.Settings.Resize_KeypadPosition = Location
-        frmKeyboard.frmKeyboard_ResizeEnd(sender, e)
+        HostKeyboard.frmKeyboard_ResizeEnd(sender, e)
         My.Settings.Save()
         Me.Hide()
 
@@ -27,39 +48,40 @@
 
     Private Sub sbWidthMinus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbWidthMinus.Click
 
-        frmKeyboard.sbWidthMinus_Click(sender, e)
+        HostKeyboard.sbWidthMinus_Click(sender, e)
 
     End Sub
 
     Private Sub sbWidthPlus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbWidthPlus.Click
 
-        frmKeyboard.sbWidthPlus_Click(sender, e)
+        HostKeyboard.sbWidthPlus_Click(sender, e)
 
     End Sub
 
     Private Sub sbHeightMinus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbHeightMinus.Click
 
-        frmKeyboard.sbHeightMinus_Click(sender, e)
+        HostKeyboard.sbHeightMinus_Click(sender, e)
 
     End Sub
 
     Private Sub sbHeightPlus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbHeightPlus.Click
 
-        frmKeyboard.sbHeightPlus_Click(sender, e)
+        HostKeyboard.sbHeightPlus_Click(sender, e)
 
     End Sub
 
     Private Sub sbIncrementMinus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbIncrementMinus.Click
 
-        frmKeyboard.sbIncrementMinus_Click(sender, e)
-        lblIncrement.Text = frmKeyboard.lblIncrement.Text
+        HostKeyboard.sbIncrementMinus_Click(sender, e)
+        lblIncrement.Text = HostKeyboard.lblIncrement.Text
 
     End Sub
 
+
     Private Sub sbIncrementPlus_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbIncrementPlus.Click
 
-        frmKeyboard.sbIncrementPlus_Click(sender, e)
-        lblIncrement.Text = frmKeyboard.lblIncrement.Text
+        HostKeyboard.sbIncrementPlus_Click(sender, e)
+        lblIncrement.Text = HostKeyboard.lblIncrement.Text
 
     End Sub
 
@@ -88,6 +110,7 @@
     Private Sub sbMove_MouseUp(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles sbMove.MouseUp
 
         drag = False
+        My.Settings.Resize_KeypadPosition = Me.Location
         My.Settings.Save()
     End Sub
 

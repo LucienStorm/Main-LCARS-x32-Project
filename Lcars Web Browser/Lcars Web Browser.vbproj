@@ -1,10 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="3.5" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>9.0.21022</ProductVersion>
-    <SchemaVersion>2.0</SchemaVersion>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProjectGuid>{B0C6DE26-9870-4CC1-A58F-E30B689D4338}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <StartupObject>Lcars_Web_Browser.My.MyApplication</StartupObject>
@@ -12,39 +10,18 @@
     <AssemblyName>LCARSWebBrowser</AssemblyName>
     <FileAlignment>512</FileAlignment>
     <MyType>WindowsForms</MyType>
-    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFrameworkProfile />
     <OptionExplicit>On</OptionExplicit>
     <OptionCompare>Binary</OptionCompare>
     <OptionStrict>Off</OptionStrict>
     <OptionInfer>On</OptionInfer>
-    <ManifestCertificateThumbprint>B62B5BF1CE89C62999FC575464F010F3A0B8F84A</ManifestCertificateThumbprint>
-    <ManifestKeyFile>Lcars Web Browser_1_TemporaryKey.pfx</ManifestKeyFile>
-    <GenerateManifests>true</GenerateManifests>
-    <TargetZone>LocalIntranet</TargetZone>
     <ApplicationManifest>My Project\app.manifest</ApplicationManifest>
+    <GenerateManifests>false</GenerateManifests>
     <SignManifests>false</SignManifests>
-    <IsWebBootstrapper>false</IsWebBootstrapper>
-    <SignAssembly>false</SignAssembly>
-    <SuiteName>Lcars</SuiteName>
-    <PublishWizardCompleted>true</PublishWizardCompleted>
-    <PublishUrl>C:\Users\CBC Design\Documents\Visual Studio 2008\Projects\Lcars Web Browser - Current Version\</PublishUrl>
-    <Install>true</Install>
-    <InstallFrom>Disk</InstallFrom>
-    <UpdateEnabled>false</UpdateEnabled>
-    <UpdateMode>Foreground</UpdateMode>
-    <UpdateInterval>7</UpdateInterval>
-    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
-    <UpdatePeriodically>false</UpdatePeriodically>
-    <UpdateRequired>false</UpdateRequired>
-    <MapFileExtensions>true</MapFileExtensions>
-    <ProductName>Lcars Web Browser</ProductName>
-    <PublisherName>CBC Design</PublisherName>
-    <ApplicationRevision>83</ApplicationRevision>
-    <ApplicationVersion>1.0.1.%2a</ApplicationVersion>
-    <UseApplicationTrust>false</UseApplicationTrust>
-    <BootstrapperEnabled>true</BootstrapperEnabled>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <DefineDebug>true</DefineDebug>
@@ -53,7 +30,27 @@
     <DocumentationFile>LCARSWebBrowser.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DocumentationFile>LCARSWebBrowser.xml</DocumentationFile>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DocumentationFile>LCARSWebBrowser.xml</DocumentationFile>
+  </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>x86</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <DefineDebug>false</DefineDebug>
     <DefineTrace>true</DefineTrace>
@@ -63,11 +60,25 @@
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.Web.WebView2.Core">
+      <HintPath>packages\Microsoft.Web.WebView2.1.0.4129.50\lib\net462\Microsoft.Web.WebView2.Core.dll</HintPath>
+      <Private>True</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="Microsoft.Web.WebView2.WinForms">
+      <HintPath>packages\Microsoft.Web.WebView2.1.0.4129.50\lib\net462\Microsoft.Web.WebView2.WinForms.dll</HintPath>
+      <Private>True</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Core" />
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
@@ -79,8 +90,42 @@
     <Import Include="System.Drawing" />
     <Import Include="System.Diagnostics" />
     <Import Include="System.Windows.Forms" />
+    <Import Include="System.Linq" />
+    <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ApplicationEvents.vb" />
+    <Compile Include="FileOpenRouter.vb" />
+    <Compile Include="Documents\DocumentFormatKind.vb" />
+    <Compile Include="Documents\DocumentTemplates.vb" />
+    <Compile Include="Documents\TypingAids.vb" />
+    <Compile Include="Documents\LineNumberMargin.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Documents\DocxDocumentAdapter.vb" />
+    <Compile Include="Documents\RtfTableBuilder.vb" />
+    <Compile Include="Ink\InkDocument.vb" />
+    <Compile Include="Ink\InkOverlayControl.vb">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Sheets\CsvIo.vb" />
+    <Compile Include="Sheets\SheetModel.vb" />
+    <Compile Include="Sheets\XlsxIo.vb" />
+    <Compile Include="Canvas\BoardModel.vb" />
+    <Compile Include="Canvas\BoardViewport.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Tabs\SpreadsheetTab.vb" />
+    <Compile Include="Tabs\BoardCanvasTab.vb" />
+    <Compile Include="Tabs\CanvasTab.vb" />
+    <Compile Include="Tabs\DocumentEditorTab.vb" />
+    <Compile Include="Tabs\DocumentViewTab.vb" />
+    <Compile Include="Tabs\IBrowserTab.vb" />
+    <Compile Include="Tabs\MarkdownEditTab.vb" />
+    <Compile Include="Tabs\RichTextEditTab.vb" />
+    <Compile Include="Tabs\TextEditTab.vb" />
+    <Compile Include="Tabs\WebBrowserTab.vb" />
+    <Compile Include="WebView2RuntimeInstaller.vb" />
     <Compile Include="Form1.vb">
       <SubType>Form</SubType>
     </Compile>
@@ -118,6 +163,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
+    <None Include="packages.config" />
     <None Include="My Project\app.manifest" />
     <None Include="My Project\Application.myapp">
       <Generator>MyApplicationCodeGenerator</Generator>
@@ -130,49 +176,31 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.2.0">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 2.0 %28x86%29</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.0">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.0 %28x86%29</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
-      <Visible>False</Visible>
-      <ProductName>Windows Installer 3.1</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="ST-Bleep.wav">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\LCARSbuttons\LCARSbuttons\LCARSbuttons.vbproj">
-      <Project>{D3ED0098-5647-4C53-B87C-DFBD8BDE7FE5}</Project>
-      <Name>LCARSbuttons</Name>
-    </ProjectReference>
+    <Reference Include="LCARS">
+      <HintPath>..\LCARSbuttons\LCARSbuttons\bin\Debug\LCARS.dll</HintPath>
+      <Private>True</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
   </ItemGroup>
+  <PropertyGroup>
+    <TargetFrameworkRootPath>C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\</TargetFrameworkRootPath>
+  </PropertyGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
+  <!-- Do not import WebView2.targets: requires newer MSBuild than Framework 4.0 MSBuild. -->
+  <PropertyGroup>
+    <_Wv2SdkDir>$(ProjectDir)packages\Microsoft.Web.WebView2.1.0.4129.50\</_Wv2SdkDir>
+    <_Wv2LoaderSrc>$(_Wv2SdkDir)runtimes\win-x86\native\WebView2Loader.dll</_Wv2LoaderSrc>
+  </PropertyGroup>
+  <Target Name="EnsureWebView2Sdk" BeforeTargets="ResolveAssemblyReferences" Condition="!Exists('$(_Wv2SdkDir)lib\net462\Microsoft.Web.WebView2.WinForms.dll')">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)..\tools\Restore-WebView2Sdk.ps1&quot;" />
+    <Error Condition="!Exists('$(_Wv2SdkDir)lib\net462\Microsoft.Web.WebView2.WinForms.dll')" Text="Automatic WebView2 SDK restore from nuget.org failed. Check internet access and retry the build." />
   </Target>
-  <Target Name="AfterBuild">
+  <Target Name="CopyWebView2Loader" AfterTargets="Build" Condition="Exists('$(_Wv2LoaderSrc)')">
+    <Copy SourceFiles="$(_Wv2LoaderSrc)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
   </Target>
-  -->
 </Project>

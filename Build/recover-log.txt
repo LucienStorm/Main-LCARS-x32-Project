@@ -1,0 +1,10 @@
+start
+True
+
+    Directory: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8.1 Tools
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---           6/24/2022  2:31 PM         545168 ildasm.exe
+
+

@@ -1,4 +1,4 @@
-﻿Public Class frmSpeechConsole
+Public Class frmSpeechConsole
     Dim oloc As Point
     Private Sub fbHide_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles fbHide.Click
         Me.Hide()
@@ -20,7 +20,7 @@
     End Sub
 
     Private Sub elbTop_MouseMove(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles elbTop.MouseMove
-        If MouseButtons = Windows.Forms.MouseButtons.Left Then
+        If MouseButtons = System.Windows.Forms.MouseButtons.Left Then
             Me.Left += MousePosition.X - oloc.X
             Me.Top += MousePosition.Y - oloc.Y
             oloc = New Point(MousePosition.X, MousePosition.Y)

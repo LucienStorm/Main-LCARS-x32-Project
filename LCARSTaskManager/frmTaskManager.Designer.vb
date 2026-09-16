@@ -28,15 +28,16 @@ Partial Class frmTaskManager
         '
         'StandardButton1
         '
-        Me.StandardButton1.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
-        Me.StandardButton1.ButtonText = "X"
-        Me.StandardButton1.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
+        Me.StandardButton1.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.StandardButton1.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
+        Me.StandardButton1.ButtonText = "CLOSE"
+        Me.StandardButton1.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.StandardButton1.Color = LCARS.LCARScolorStyles.FunctionOffline
-        Me.StandardButton1.Location = New System.Drawing.Point(351, 0)
+        Me.StandardButton1.Location = New System.Drawing.Point(273, 311)
         Me.StandardButton1.Name = "StandardButton1"
-        Me.StandardButton1.Size = New System.Drawing.Size(30, 32)
+        Me.StandardButton1.Size = New System.Drawing.Size(100, 28)
         Me.StandardButton1.TabIndex = 1
-        Me.StandardButton1.Text = "X"
+        Me.StandardButton1.Text = "CLOSE"
         '
         'lstProcesses
         '

@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 ''' <summary>
 ''' Contains methods for reading and modifying a version definition file.
 ''' </summary>
@@ -23,6 +23,10 @@ Public Class ProgramVersions
 
     Private Sub loadFile(ByVal file As String)
         myFilePath = file
+        If Not System.IO.File.Exists(file) Then
+            myGlobalVersion = "0.0.0.0"
+            Return
+        End If
         Using myReader As New StreamReader(file)
             myGlobalVersion = myReader.ReadLine()
             While myReader.Peek() <> -1

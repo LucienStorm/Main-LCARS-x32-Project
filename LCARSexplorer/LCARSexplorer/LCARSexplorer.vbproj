@@ -1,5 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -99,6 +102,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="FileAssociations.vb" />
+    <Compile Include="ExplorerLcarsStartPin.vb" />
     <Compile Include="frmMergeOptions.Designer.vb">
       <DependentUpon>frmMergeOptions.vb</DependentUpon>
     </Compile>

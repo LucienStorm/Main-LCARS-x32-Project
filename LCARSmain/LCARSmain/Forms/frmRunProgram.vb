@@ -3,7 +3,7 @@ Public Class frmRunProgram
     Private Sub fbBrowse_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles fbBrowse.Click
         Dim mybrowse As New LCARSexplorer.frmFileSelect("C:\Program Files", ".exe,.bat,", "Select Program")
         mybrowse.ShowDialog()
-        If (mybrowse.DialogResult = Windows.Forms.DialogResult.OK) Then
+        If (mybrowse.DialogResult = System.Windows.Forms.DialogResult.OK) Then
             txtCommand.Text = mybrowse.ReturnPath
         End If
     End Sub

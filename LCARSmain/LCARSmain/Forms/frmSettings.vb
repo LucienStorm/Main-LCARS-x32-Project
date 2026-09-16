@@ -121,7 +121,7 @@ Public Class frmSettings
         tglVoiceTimeout.State = LCARS.x32.modSettings.CommandTimeoutEnabled
         txtCommandTimeout.Text = LCARS.x32.modSettings.CommandTimeout.ToString()
 
-        tglDates.State = CBool(GetSetting("LCARS x32", "Application", "Stardate", "FALSE"))
+        LoadClockModeUi()
 
         'Load main screen types
         Dim mainScreenIndex As Integer = 1
@@ -176,7 +176,9 @@ Public Class frmSettings
         txtSoundPath.Text = "Button Sound Path: " & GetSetting("LCARS X32", "Application", "ButtonSound", Application.StartupPath & "\207.wav")
 
         'Updates
-        lblVersion.Text = "Program Version: " & New LCARSUpdate.ProgramVersions(Application.StartupPath & "\versions.txt").getGlobalVersion()
+        Dim globalVer As String = New LCARSUpdate.ProgramVersions(Application.StartupPath & "\versions.txt").getGlobalVersion()
+        Dim exeVer As String = Diagnostics.FileVersionInfo.GetVersionInfo(Application.ExecutablePath).FileVersion
+        lblVersion.Text = "Program Version: " & globalVer & vbCrLf & "EXE: " & exeVer
         tglAutoUpdates.State = CBool(GetSetting("LCARS X32", "Application", "Updates", "FALSE"))
         If GetSetting("LCARSUpdate", "Config", "UpdatePath", "release") = "experimental" Then
             fbChannelDot.Top = hpExperimental.Top
@@ -199,6 +201,9 @@ Public Class frmSettings
         tglDebug.State = CBool(GetSetting("LCARS x32", "Application", "DebugSwitch", "FALSE"))
 
         tglDDE.State = LCARS.x32.modSettings.DDEEnabled
+
+        InitBrowserHomeControls()
+        InitWeatherControls()
 
         'Load Colors
         myFiles = System.IO.Directory.GetFiles(Application.StartupPath & "\colors", "*.lxcp")
@@ -270,6 +275,10 @@ Public Class frmSettings
         Me.Close()
     End Sub
 
+    Protected Overrides Sub OnShellChromeLayout()
+        PlaceShellAlignedCloseButton(sbExitMyComp)
+    End Sub
+
     Private Sub sbDefault_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbDefault.Click
         picWallpaper.Image = My.Resources.federationLogo
         SetWallpaper(picWallpaper.Image, screenIndex)
@@ -282,7 +291,7 @@ Public Class frmSettings
 
         myFile.Filter = "Image Files|*.jpg;*.jpeg;*.jpe;*.jfif;*.bmp;*.gif;*.png;*.tif;*.tiff;*.ico"
         result = myFile.ShowDialog
-        If result = Windows.Forms.DialogResult.OK Then
+        If result = System.Windows.Forms.DialogResult.OK Then
             picWallpaper.Image = Image.FromFile(myFile.FileName)
             SetWallpaper(picWallpaper.Image, screenIndex)
             Wallpaper(screenIndex) = myFile.FileName
@@ -410,8 +419,60 @@ Public Class frmSettings
         End If
     End Sub
 
-    Private Sub cbDates_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles tglDates.Click
-        SaveSetting("LCARS x32", "Application", "Stardate", tglDates.State.ToString())
+    Private Sub LoadClockModeUi()
+        LCARS.ClockDisplay.EnsureMigrated()
+        ApplyClockModeUi(LCARS.ClockDisplay.GetClockMode(), LCARS.ClockDisplay.GetModernStyle())
+    End Sub
+
+    Private Sub ApplyClockModeUi(ByVal mode As LCARS.ClockMode, ByVal style As LCARS.ModernStardateStyle)
+        hpClockEarth.Color = LCARS.LCARScolorStyles.SystemFunction
+        hpClockTNG.Color = LCARS.LCARScolorStyles.SystemFunction
+        hpClockModern.Color = LCARS.LCARScolorStyles.SystemFunction
+        hpModernFractional.Color = LCARS.LCARScolorStyles.SystemFunction
+        hpModern24h.Color = LCARS.LCARScolorStyles.SystemFunction
+
+        Select Case mode
+            Case LCARS.ClockMode.TNG
+                hpClockTNG.Color = LCARS.LCARScolorStyles.PrimaryFunction
+            Case LCARS.ClockMode.Modern
+                hpClockModern.Color = LCARS.LCARScolorStyles.PrimaryFunction
+            Case Else
+                hpClockEarth.Color = LCARS.LCARScolorStyles.PrimaryFunction
+        End Select
+
+        Dim modernVisible As Boolean = (mode = LCARS.ClockMode.Modern)
+        hpModernFractional.Visible = modernVisible
+        hpModern24h.Visible = modernVisible
+        If style = LCARS.ModernStardateStyle.TwentyFourHour Then
+            hpModern24h.Color = LCARS.LCARScolorStyles.PrimaryFunction
+        Else
+            hpModernFractional.Color = LCARS.LCARScolorStyles.PrimaryFunction
+        End If
+    End Sub
+
+    Private Sub hpClockEarth_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles hpClockEarth.Click
+        LCARS.ClockDisplay.SetClockMode(LCARS.ClockMode.Earth)
+        ApplyClockModeUi(LCARS.ClockMode.Earth, LCARS.ClockDisplay.GetModernStyle())
+    End Sub
+
+    Private Sub hpClockTNG_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles hpClockTNG.Click
+        LCARS.ClockDisplay.SetClockMode(LCARS.ClockMode.TNG)
+        ApplyClockModeUi(LCARS.ClockMode.TNG, LCARS.ClockDisplay.GetModernStyle())
+    End Sub
+
+    Private Sub hpClockModern_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles hpClockModern.Click
+        LCARS.ClockDisplay.SetClockMode(LCARS.ClockMode.Modern)
+        ApplyClockModeUi(LCARS.ClockMode.Modern, LCARS.ClockDisplay.GetModernStyle())
+    End Sub
+
+    Private Sub hpModernFractional_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles hpModernFractional.Click
+        LCARS.ClockDisplay.SetModernStyle(LCARS.ModernStardateStyle.Fractional)
+        ApplyClockModeUi(LCARS.ClockMode.Modern, LCARS.ModernStardateStyle.Fractional)
+    End Sub
+
+    Private Sub hpModern24h_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles hpModern24h.Click
+        LCARS.ClockDisplay.SetModernStyle(LCARS.ModernStardateStyle.TwentyFourHour)
+        ApplyClockModeUi(LCARS.ClockMode.Modern, LCARS.ModernStardateStyle.TwentyFourHour)
     End Sub
 
     Private Sub lstLanguages_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles lstLanguages.SelectedIndexChanged
@@ -700,7 +761,7 @@ Public Class frmSettings
     Private Sub fbBrowseSound_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles fbBrowseSound.Click
         Dim myFileSelect As New LCARSexplorer.frmFileSelect(Application.StartupPath, ".wav,", "Select a sound file")
         myFileSelect.ShowDialog()
-        If myFileSelect.DialogResult = Windows.Forms.DialogResult.OK Then
+        If myFileSelect.DialogResult = System.Windows.Forms.DialogResult.OK Then
             If System.IO.File.Exists(myFileSelect.ReturnPath) Then
                 Dim temp As AlertEntry = alertList(lstAlerts.SelectedIndex)
                 temp.Sound = myFileSelect.ReturnPath
@@ -842,7 +903,7 @@ Public Class frmSettings
         Dim myFileSelect As New LCARSexplorer.frmFileSelect(Application.StartupPath, ".wav,", "Select a sound file")
         myFileSelect.ShowDialog()
         soundEditing = True
-        If myFileSelect.DialogResult = Windows.Forms.DialogResult.OK Then
+        If myFileSelect.DialogResult = System.Windows.Forms.DialogResult.OK Then
             If System.IO.File.Exists(myFileSelect.ReturnPath) Then
                 Try
                     CType(lstSounds.SelectedItem, LCARSSound).Path = myFileSelect.ReturnPath
@@ -915,4 +976,142 @@ Public Class frmSettings
             End If
         End If
     End Sub
+
+#Region " Browser home "
+    Private lblBrowserHome As Label
+    Private WithEvents txtBrowserHome As TextBox
+    Private WithEvents sbSaveBrowserHome As LCARS.Controls.StandardButton
+
+    ''' <summary>
+    ''' Adds Browser Home URL controls to the Appearance tab (same key as SET HOME in the browser).
+    ''' </summary>
+    Private Sub InitBrowserHomeControls()
+        If txtBrowserHome IsNot Nothing Then Return
+
+        lblBrowserHome = New Label()
+        lblBrowserHome.Font = New Font("LCARS", 18.0!, FontStyle.Regular, GraphicsUnit.Point, CType(0, Byte))
+        lblBrowserHome.ForeColor = Color.Orange
+        lblBrowserHome.Location = New Point(320, 12)
+        lblBrowserHome.Size = New Size(320, 28)
+        lblBrowserHome.Text = "BROWSER HOME URL"
+        lblBrowserHome.BackColor = Color.Black
+
+        txtBrowserHome = New TextBox()
+        txtBrowserHome.BackColor = Color.Black
+        txtBrowserHome.BorderStyle = BorderStyle.FixedSingle
+        txtBrowserHome.Font = New Font("LCARS", 14.25!, FontStyle.Regular, GraphicsUnit.Point, CType(0, Byte))
+        txtBrowserHome.ForeColor = Color.Orange
+        txtBrowserHome.Location = New Point(320, 44)
+        txtBrowserHome.Size = New Size(320, 28)
+        txtBrowserHome.Text = GetSetting("LCARS x32", "Browser", "HomeUrl", "https://www.bing.com")
+
+        sbSaveBrowserHome = New LCARS.Controls.StandardButton()
+        sbSaveBrowserHome.ButtonText = "SAVE HOME"
+        sbSaveBrowserHome.ButtonTextAlign = ContentAlignment.BottomRight
+        sbSaveBrowserHome.Location = New Point(320, 82)
+        sbSaveBrowserHome.Size = New Size(140, 28)
+        sbSaveBrowserHome.Text = "SAVE HOME"
+        sbSaveBrowserHome.Color = LCARS.LCARScolorStyles.NavigationFunction
+
+        LcarsTabPage2.Controls.Add(lblBrowserHome)
+        LcarsTabPage2.Controls.Add(txtBrowserHome)
+        LcarsTabPage2.Controls.Add(sbSaveBrowserHome)
+        sbSaveBrowserHome.BringToFront()
+        txtBrowserHome.BringToFront()
+        lblBrowserHome.BringToFront()
+    End Sub
+
+    ''' <summary>
+    ''' Persists the browser home URL for LCARSWebBrowser SET HOME / HOME PAGE.
+    ''' </summary>
+    Private Sub sbSaveBrowserHome_Click(ByVal sender As Object, ByVal e As EventArgs) Handles sbSaveBrowserHome.Click
+        Dim url As String = txtBrowserHome.Text.Trim()
+        If url = "" Then
+            MsgBox("Enter a home page URL.", MsgBoxStyle.Exclamation, "Browser Home")
+            Return
+        End If
+        If Not url.Contains("://") Then
+            url = "https://" & url
+            txtBrowserHome.Text = url
+        End If
+        SaveSetting("LCARS x32", "Browser", "HomeUrl", url)
+        MsgBox("Browser home set to:" & vbNewLine & url, MsgBoxStyle.OkOnly, "Browser Home")
+    End Sub
+#End Region
+
+#Region " Weather HUD "
+    Private lblWeatherCity As Label
+    Private lblWeatherHelp As Label
+    Private WithEvents txtWeatherCity As TextBox
+    Private WithEvents sbSaveWeatherCity As LCARS.Controls.StandardButton
+
+    ''' <summary>
+    ''' Adds weather location controls to the Appearance tab for the mainscreen HUD widget.
+    ''' Uses Open-Meteo (no API key). Accepts city name or lat,lon.
+    ''' </summary>
+    Private Sub InitWeatherControls()
+        If txtWeatherCity IsNot Nothing Then Return
+
+        lblWeatherCity = New Label()
+        lblWeatherCity.Font = New Font("LCARS", 18.0!, FontStyle.Regular, GraphicsUnit.Point, CType(0, Byte))
+        lblWeatherCity.ForeColor = Color.Orange
+        lblWeatherCity.Location = New Point(320, 120)
+        lblWeatherCity.Size = New Size(420, 28)
+        lblWeatherCity.Text = "WEATHER LOCATION (OPEN-METEO)"
+        lblWeatherCity.BackColor = Color.Black
+
+        txtWeatherCity = New TextBox()
+        txtWeatherCity.BackColor = Color.Black
+        txtWeatherCity.BorderStyle = BorderStyle.FixedSingle
+        txtWeatherCity.Font = New Font("LCARS", 14.25!, FontStyle.Regular, GraphicsUnit.Point, CType(0, Byte))
+        txtWeatherCity.ForeColor = Color.Orange
+        txtWeatherCity.Location = New Point(320, 152)
+        txtWeatherCity.Size = New Size(320, 28)
+        txtWeatherCity.Text = GetSetting("LCARS x32", "Weather", "City", "")
+
+        lblWeatherHelp = New Label()
+        lblWeatherHelp.Font = New Font("LCARS", 12.0!, FontStyle.Regular, GraphicsUnit.Point, CType(0, Byte))
+        lblWeatherHelp.ForeColor = Color.FromArgb(255, 153, 0)
+        lblWeatherHelp.Location = New Point(320, 186)
+        lblWeatherHelp.Size = New Size(420, 72)
+        lblWeatherHelp.BackColor = Color.Black
+        lblWeatherHelp.Text = "EXAMPLES: Chicago  |  Chicago, Illinois, US  |  41.88,-87.63" & vbCrLf &
+                              "No API key needed. Blank = try IP location." & vbCrLf &
+                              "City, state, country is fine."
+
+        sbSaveWeatherCity = New LCARS.Controls.StandardButton()
+        sbSaveWeatherCity.ButtonText = "SAVE WEATHER"
+        sbSaveWeatherCity.ButtonTextAlign = ContentAlignment.BottomRight
+        sbSaveWeatherCity.Location = New Point(320, 262)
+        sbSaveWeatherCity.Size = New Size(160, 28)
+        sbSaveWeatherCity.Text = "SAVE WEATHER"
+        sbSaveWeatherCity.Color = LCARS.LCARScolorStyles.NavigationFunction
+
+        LcarsTabPage2.Controls.Add(lblWeatherCity)
+        LcarsTabPage2.Controls.Add(txtWeatherCity)
+        LcarsTabPage2.Controls.Add(lblWeatherHelp)
+        LcarsTabPage2.Controls.Add(sbSaveWeatherCity)
+        sbSaveWeatherCity.BringToFront()
+        txtWeatherCity.BringToFront()
+        lblWeatherHelp.BringToFront()
+        lblWeatherCity.BringToFront()
+    End Sub
+
+    ''' <summary>
+    ''' Persists weather location and triggers an immediate HUD refresh.
+    ''' </summary>
+    Private Sub sbSaveWeatherCity_Click(ByVal sender As Object, ByVal e As EventArgs) Handles sbSaveWeatherCity.Click
+        Dim city As String = txtWeatherCity.Text.Trim()
+        SaveSetting("LCARS x32", "Weather", "City", city)
+        SaveSetting("LCARS x32", "Weather", "Latitude", "")
+        SaveSetting("LCARS x32", "Weather", "Longitude", "")
+        modHudWeather.ForceRefresh()
+        If city = "" Then
+            MsgBox("Weather location cleared. HUD will use network/IP location when available.", MsgBoxStyle.Information, "Weather")
+        Else
+            MsgBox("Weather location set to:" & vbNewLine & city & vbNewLine & vbNewLine &
+                  "Uses free Open-Meteo (no API key).", MsgBoxStyle.OkOnly, "Weather")
+        End If
+    End Sub
+#End Region
 End Class

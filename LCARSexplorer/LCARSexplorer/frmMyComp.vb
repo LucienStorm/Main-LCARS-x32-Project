@@ -32,11 +32,34 @@ Public Class frmMyComp
 #End Region
 
 #Region " Selection Support "
+    Private Const SelectMoveDeadZone As Integer = 12
+
     Private ReadOnly Property cancelClick() As Boolean
         Get
             Return moved OrElse (Now - clickStart) > selectTime
         End Get
     End Property
+
+    ''' <summary>
+    ''' True when Click Mode is Double (tap selects, double-tap opens).
+    ''' </summary>
+    Private Function IsDoubleClickMode() As Boolean
+        Return String.Equals(My.Settings.ClickMode, "Double", StringComparison.OrdinalIgnoreCase)
+    End Function
+
+    ''' <summary>
+    ''' Message shown when an action needs a selection but none exists.
+    ''' </summary>
+    Private Function NoSelectionMessage() As String
+        Dim how As String
+        If IsDoubleClickMode() Then
+            how = "Select an item with a single tap (it will stay white)."
+        Else
+            how = "Select an item by holding your finger/mouse down for about half a second (it will stay white)."
+        End If
+        Return "No item selected.  " & how & vbNewLine & _
+               "You can also select multiple items by dragging on the empty area around the buttons."
+    End Function
 
     Private Sub OnSelectStart()
         If My.Computer.Keyboard.ShiftKeyDown Then
@@ -57,29 +80,57 @@ Public Class frmMyComp
         sbRename.Lit = oneSelected
         sbRename.Clickable = oneSelected
         sbOpenWith.Lit = oneSelected
+        sbPinToStart.Lit = oneSelected
         Dim atLeastOne As Boolean = (selectedButtons.Count > 0)
         sbProperties.Lit = atLeastOne
     End Sub
 
+    ''' <summary>
+    ''' Applies selection highlight and updates the selection set for one item.
+    ''' </summary>
+    Private Sub ApplyItemSelection(ByVal ctrl As LCComplexButton)
+        If selMode = SelectMode.Symmetric AndAlso selectedButtons.contains(ctrl) Then
+            selectedButtons.remove(ctrl)
+            ctrl.RedAlert = LCARS.LCARSalert.Normal
+        Else
+            selectedButtons.add(ctrl)
+            ctrl.RedAlert = LCARS.LCARSalert.White
+        End If
+        OnSelectionChanged()
+    End Sub
+
     Private Sub item_MouseDown(ByVal sender As Object, ByVal e As MouseEventArgs)
+        If e.Button <> Windows.Forms.MouseButtons.Left Then Return
         clickStart = Now
+        moved = False
+        selStart = e.Location
+        OnSelectStart()
+    End Sub
+
+    Private Sub item_MouseMove(ByVal sender As Object, ByVal e As MouseEventArgs)
+        If e.Button <> Windows.Forms.MouseButtons.Left Then Return
+        Dim dx As Integer = Math.Abs(e.X - selStart.X)
+        Dim dy As Integer = Math.Abs(e.Y - selStart.Y)
+        If dx > SelectMoveDeadZone OrElse dy > SelectMoveDeadZone Then
+            moved = True
+        End If
     End Sub
 
     Private Sub item_Click(ByVal sender As Object, ByVal e As EventArgs)
-        ' This is a Click handler, rather than a MouseUp handler because Click events
-        ' are raised before MouseUp events, and if the Click handler takes more than
-        ' 500 ms to complete, the file would be selected. Therefore, this has to be
-        ' processed (and added) before the main click handler.
-        If Not moved AndAlso (Now - clickStart) > selectTime Then
-            Dim ctrl As LCComplexButton = DirectCast(sender, LCComplexButton)
-            If selMode = SelectMode.Symmetric And selectedButtons.contains(ctrl) Then
-                selectedButtons.remove(ctrl)
-                ctrl.RedAlert = LCARS.LCARSalert.Normal
-            Else
-                selectedButtons.add(ctrl)
-                ctrl.RedAlert = LCARS.LCARSalert.White
-            End If
+        ' Double mode: tap selects immediately. Single mode: hold-to-select (selectTime).
+        ' Open is wired separately via associateClickHandler (Click or DoubleClick).
+        If moved Then Return
+
+        Dim shouldSelect As Boolean
+        If IsDoubleClickMode() Then
+            shouldSelect = True
+        Else
+            shouldSelect = (Now - clickStart) > selectTime
         End If
+        If Not shouldSelect Then Return
+
+        Dim ctrl As LCComplexButton = DirectCast(sender, LCComplexButton)
+        ApplyItemSelection(ctrl)
     End Sub
 
     Private Sub pnlMyComp_MouseDown(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles gridMyComp.MouseDown
@@ -91,7 +142,13 @@ Public Class frmMyComp
 
     Private Sub pnlMyComp_MouseMove(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles gridMyComp.MouseMove
         If e.Button = Windows.Forms.MouseButtons.Left Then
-            moved = True
+            Dim dx As Integer = Math.Abs(e.X - selStart.X)
+            Dim dy As Integer = Math.Abs(e.Y - selStart.Y)
+            If dx > SelectMoveDeadZone OrElse dy > SelectMoveDeadZone Then
+                moved = True
+            End If
+            If Not moved Then Return
+
             Dim selectionRect As Rectangle = getSelectionRect(e.Location)
             mySelection.Bounds = gridMyComp.RectangleToScreen(selectionRect)
             If Not mySelection.Visible Then
@@ -191,6 +248,10 @@ Public Class frmMyComp
         loadDir(curPath)
     End Sub
 
+    Protected Overrides Sub OnShellChromeLayout()
+        PlaceShellAlignedCloseButton(sbClose)
+    End Sub
+
     Private Sub loadMyComp()
         gridMyComp.Clear()
         gridMyComp.ControlSize = New Size((gridMyComp.Width - 38) \ 2, 30)
@@ -209,6 +270,7 @@ Public Class frmMyComp
             myButton.Beeping = beeping
             myButton.HoldDraw = False
             AddHandler myButton.MouseDown, AddressOf item_MouseDown
+            AddHandler myButton.MouseMove, AddressOf item_MouseMove
             AddHandler myButton.Click, AddressOf item_Click
 
             If myDrive.IsReady Then
@@ -307,6 +369,7 @@ Public Class frmMyComp
                 If My.Settings.dimHidden Then myButton.Lit = Not hidden
 
                 AddHandler myButton.MouseDown, AddressOf item_MouseDown
+                AddHandler myButton.MouseMove, AddressOf item_MouseMove
                 AddHandler myButton.Click, AddressOf item_Click
 
                 If reparsePoint Then
@@ -374,7 +437,7 @@ Public Class frmMyComp
             Dim props As New frmProperties(getSelectedFiles())
             dockDialog(props)
         Else
-            MsgBox("No item selected.  Select an item by holding the mouse down for more than a second (it will stay white)." & vbNewLine & "You can also select multiple items by clicking in the back area and dragging around the desired items.", MsgBoxStyle.Exclamation, "ERROR: NO ITEM SLECTED")
+            MsgBox(NoSelectionMessage(), MsgBoxStyle.Exclamation, "ERROR: NO ITEM SELECTED")
         End If
     End Sub
 
@@ -534,6 +597,16 @@ Public Class frmMyComp
         Else
             MsgBox("Please select one file", MsgBoxStyle.Information)
         End If
+    End Sub
+
+    Private Sub sbPinToStart_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbPinToStart.Click
+        Dim files() As String = getSelectedFiles()
+        If files.Length <> 1 Then
+            MsgBox("Select one file or shortcut to pin.", MsgBoxStyle.Information, "PIN TO LCARS START")
+            Return
+        End If
+        Dim result As String = ExplorerLcarsStartPin.PinSelected(files(0))
+        MsgBox(result, MsgBoxStyle.Information, "PIN TO LCARS START")
     End Sub
 
     Private Sub sbOptions_Click(ByVal senter As System.Object, ByVal e As System.EventArgs) Handles sbOptions.Click

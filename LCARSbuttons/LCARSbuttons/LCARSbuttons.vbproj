@@ -1,5 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -39,6 +42,7 @@
     <OutputPath>bin\Debug\</OutputPath>
     <DocumentationFile>LCARS.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+    <PathMap>$(MSBuildProjectDirectory)=.</PathMap>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -48,6 +52,7 @@
     <OutputPath>bin\Debug\</OutputPath>
     <DocumentationFile>LCARS.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+    <PathMap>$(MSBuildProjectDirectory)=.</PathMap>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -78,6 +83,7 @@
     </Compile>
     <Compile Include="Classes\LCARSColor.vb" />
     <Compile Include="Classes\Stardates.vb" />
+    <Compile Include="Classes\ClockDisplay.vb" />
     <Compile Include="Classes\UI.vb">
       <SubType>Form</SubType>
     </Compile>

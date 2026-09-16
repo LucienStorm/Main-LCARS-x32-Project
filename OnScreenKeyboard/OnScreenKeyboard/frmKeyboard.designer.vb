@@ -41,6 +41,7 @@ Partial Class frmKeyboard
         Me.sbFN3 = New LCARS.Controls.StandardButton
         Me.sbFn2 = New LCARS.Controls.StandardButton
         Me.sbFn1 = New LCARS.Controls.StandardButton
+        Me.sbElevate = New LCARS.Controls.StandardButton
         Me.StandardButton2 = New LCARS.Controls.StandardButton
         Me.sbFn = New LCARS.Controls.StandardButton
         Me.sbF8 = New LCARS.Controls.StandardButton
@@ -189,23 +190,23 @@ Partial Class frmKeyboard
         Me.sbTitle.ButtonTextHeight = -1
         Me.sbTitle.Location = New System.Drawing.Point(7, 4)
         Me.sbTitle.Name = "sbTitle"
-        Me.sbTitle.Size = New System.Drawing.Size(1074, 35)
+        Me.sbTitle.Size = New System.Drawing.Size(974, 35)
         Me.sbTitle.TabIndex = 53
         Me.sbTitle.Text = "MOVE KEYPAD"
         '
-        'StandardButton1
+        'StandardButton1 — SNAP toggle (top chrome)
         '
         Me.StandardButton1.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.StandardButton1.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
-        Me.StandardButton1.ButtonText = "X"
+        Me.StandardButton1.ButtonText = "SNAP ON"
         Me.StandardButton1.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.StandardButton1.ButtonTextHeight = -1
-        Me.StandardButton1.Color = LCARS.LCARScolorStyles.FunctionOffline
+        Me.StandardButton1.Color = LCARS.LCARScolorStyles.PrimaryFunction
         Me.StandardButton1.Location = New System.Drawing.Point(1297, 4)
         Me.StandardButton1.Name = "StandardButton1"
-        Me.StandardButton1.Size = New System.Drawing.Size(43, 35)
+        Me.StandardButton1.Size = New System.Drawing.Size(72, 35)
         Me.StandardButton1.TabIndex = 54
-        Me.StandardButton1.Text = "X"
+        Me.StandardButton1.Text = "SNAP ON"
         '
         'sbChangeSize
         '
@@ -247,9 +248,7 @@ Partial Class frmKeyboard
         '
         'SplitContainer1
         '
-        Me.SplitContainer1.Anchor = CType((((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
-                    Or System.Windows.Forms.AnchorStyles.Left) _
-                    Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.SplitContainer1.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
         Me.SplitContainer1.Location = New System.Drawing.Point(7, 60)
         Me.SplitContainer1.Name = "SplitContainer1"
         '
@@ -589,22 +588,39 @@ Partial Class frmKeyboard
         Me.sbFn1.Tag = "1"
         Me.sbFn1.Text = "FN1"
         '
-        'StandardButton2
+        'sbElevate
+        '
+        Me.sbElevate._ForceCaps = False
+        Me.sbElevate.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.sbElevate.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
+        Me.sbElevate.ButtonText = "ELEVATE"
+        Me.sbElevate.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
+        Me.sbElevate.ButtonTextHeight = -1
+        Me.sbElevate.Color = LCARS.LCARScolorStyles.SystemFunction
+        Me.sbElevate.Data = "ELEVATE"
+        Me.sbElevate.Data2 = "ELEVATE"
+        Me.sbElevate.Location = New System.Drawing.Point(987, 4)
+        Me.sbElevate.Name = "sbElevate"
+        Me.sbElevate.Size = New System.Drawing.Size(94, 35)
+        Me.sbElevate.TabIndex = 479
+        Me.sbElevate.Text = "ELEVATE"
+        '
+        'StandardButton2 — CLOSE (replaces Hide; keep yellow + rounded-square shape)
         '
         Me.StandardButton2._ForceCaps = False
         Me.StandardButton2.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
-        Me.StandardButton2.ButtonText = "Hide"
+        Me.StandardButton2.ButtonText = "CLOSE"
         Me.StandardButton2.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.StandardButton2.ButtonTextHeight = -1
-        Me.StandardButton2.Color = LCARS.LCARScolorStyles.SystemFunction
-        Me.StandardButton2.Data = "HIDE"
-        Me.StandardButton2.Data2 = "HIDE"
+        Me.StandardButton2.Color = LCARS.LCARScolorStyles.MiscFunction
+        Me.StandardButton2.Data = "CLOSE"
+        Me.StandardButton2.Data2 = "CLOSE"
         Me.StandardButton2.Location = New System.Drawing.Point(952, 336)
         Me.StandardButton2.Name = "StandardButton2"
         Me.StandardButton2.Size = New System.Drawing.Size(64, 64)
         Me.StandardButton2.TabIndex = 476
         Me.StandardButton2.Tag = "36"
-        Me.StandardButton2.Text = "Hide"
+        Me.StandardButton2.Text = "CLOSE"
         '
         'sbFn
         '
@@ -2235,13 +2251,14 @@ Partial Class frmKeyboard
         'frmKeyboard
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
-        Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
+        Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(1350, 542)
         Me.Controls.Add(Me.Label3)
         Me.Controls.Add(Me.SplitContainer1)
         Me.Controls.Add(Me.Label2)
         Me.Controls.Add(Me.Label1)
+        Me.Controls.Add(Me.sbElevate)
         Me.Controls.Add(Me.sbNum)
         Me.Controls.Add(Me.sbChangeSize)
         Me.Controls.Add(Me.StandardButton1)
@@ -2366,6 +2383,7 @@ Partial Class frmKeyboard
     Friend WithEvents sbRMultiply As LCARS.Controls.StandardButton
     Friend WithEvents sbRForwardSlash As LCARS.Controls.StandardButton
     Friend WithEvents Label3 As System.Windows.Forms.Label
+    Friend WithEvents sbElevate As LCARS.Controls.StandardButton
     Friend WithEvents StandardButton2 As LCARS.Controls.StandardButton
     Friend WithEvents sbFn1 As LCARS.Controls.StandardButton
     Friend WithEvents sbFn12 As LCARS.Controls.StandardButton

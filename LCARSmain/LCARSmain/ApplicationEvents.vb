@@ -1,4 +1,4 @@
-﻿Option Strict On
+Option Strict On
 
 <Assembly: System.Security.Permissions.PermissionSet(Security.Permissions.SecurityAction.RequestMinimum, name:="FullTrust")> 
 Namespace My
@@ -15,6 +15,15 @@ Namespace My
         Private isSettings As Boolean = False
 
         Private Sub MyApplication_Startup(ByVal sender As Object, ByVal e As Microsoft.VisualBasic.ApplicationServices.StartupEventArgs) Handles Me.Startup
+            modDiagnostics.LogStartupBanner()
+            AddHandler System.Windows.Forms.Application.ThreadException, AddressOf Application_ThreadException
+            ' Winlogon may respawn LCARS mid-install. Exit immediately so we do not
+            ' prewarm OSK / lock USB binaries while runInstallScript is copying.
+            If modShellFallback.IsUpdateInProgress() AndAlso Not Command().ToLower().Contains("-u") Then
+                modDiagnostics.LogInfo("MyApplication_Startup", "update-in-progress.flag present — exiting without shell init")
+                e.Cancel = True
+                Return
+            End If
             If Command().ToLower().Contains("--settings") Then
                 'Load settings
                 If Process.GetProcessesByName("LCARSmain").Length = 1 Then
@@ -59,6 +68,13 @@ Namespace My
             End If
         End Sub
         Private Sub MyApplication_UnhandledException(ByVal sender As Object, ByVal e As Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs) Handles Me.UnhandledException
+            modDiagnostics.LogException("UnhandledException", e.Exception, "ExitApplication=" & e.ExitApplication.ToString())
+            ' Always restore a desktop first — before MsgBox / LCARSshutdown, which can hang on a tablet.
+            If modShellFallback.IsLcarsRegisteredShell() Then
+                modShellFallback.CleanupOrphanShellProcesses()
+            Else
+                modShellFallback.EnsureExplorerRunningIfNeeded()
+            End If
             If Not hasfailed Then
                 hasfailed = True
                 Try
@@ -71,25 +87,48 @@ Namespace My
                         mywriter.WriteLine()
                         mywriter.WriteLine(My.Computer.Info.OSFullName)
                         mywriter.WriteLine()
-                        LCARS.UI.MsgBox("An error has occured in LCARSmain.exe" & vbNewLine & "The error has been recorded in a text file on your desktop." & vbNewLine & "LCARS will now attempt to return to Windows.", _
-                                         MsgBoxStyle.Critical Or MsgBoxStyle.OkOnly, "Critical Error")
                     End Using
-                Catch ex As Exception
-                    LCARS.UI.MsgBox("An error has occured in LCARSmain.exe" & vbNewLine & "The error could not be recorded." & vbNewLine & _
-                                     "LCARS x32 will now attempt to return you to Windows.", MsgBoxStyle.Critical Or MsgBoxStyle.OkOnly, "Critical Error")
+                Catch
                 End Try
                 If Not IsSettingsMode Then
                     Try
                         e.ExitApplication = False
                         doDeactivate(Nothing)
-                    Catch ex As Exception
-                        LCARS.UI.MsgBox("LCARS x32 could not close successfully. Please restart your computer.", MsgBoxStyle.Critical, "Critical Error")
-                        End
+                    Catch
+                        If modShellFallback.IsLcarsRegisteredShell() Then
+                            modShellFallback.CleanupOrphanShellProcesses()
+                        Else
+                            modShellFallback.EnsureExplorerRunningIfNeeded()
+                        End If
                     End Try
                 End If
+                If modShellFallback.IsLcarsRegisteredShell() Then
+                    modShellFallback.CleanupOrphanShellProcesses()
+                Else
+                    modShellFallback.EnsureExplorerRunningIfNeeded()
+                End If
             Else
-                LCARS.UI.MsgBox("LCARS x32 could not close successfully. Please restart your computer.", MsgBoxStyle.Critical, "Critical Error")
+                If modShellFallback.IsLcarsRegisteredShell() Then
+                    modShellFallback.CleanupOrphanShellProcesses()
+                Else
+                    modShellFallback.EnsureExplorerRunningIfNeeded()
+                End If
                 End
+            End If
+        End Sub
+
+        Private Sub Application_ThreadException(ByVal sender As Object, ByVal e As Threading.ThreadExceptionEventArgs)
+            modDiagnostics.LogException("ThreadException", e.Exception)
+            If modShellFallback.IsLcarsRegisteredShell() Then
+                modShellFallback.CleanupOrphanShellProcesses()
+            Else
+                modShellFallback.EnsureExplorerRunningIfNeeded()
+            End If
+        End Sub
+
+        Private Sub MyApplication_Shutdown(ByVal sender As Object, ByVal e As EventArgs) Handles Me.Shutdown
+            If modShellFallback.ShouldStartExplorerOnShutdown() Then
+                modShellFallback.EnsureExplorerRunning()
             End If
         End Sub
 

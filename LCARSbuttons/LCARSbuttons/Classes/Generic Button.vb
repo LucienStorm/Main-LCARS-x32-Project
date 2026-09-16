@@ -1,4 +1,4 @@
-﻿Imports System.Drawing
+Imports System.Drawing
 Imports System.ComponentModel
 Imports System.Windows.Forms
 Imports System.Windows.Forms.Design
@@ -711,6 +711,15 @@ Public Class LCARSbuttonClass
         End If
     End Sub
 
+    ''' <summary>
+    ''' Rebuild cached bitmaps at the current control size (used by OSK after scale).
+    ''' </summary>
+    Public Sub ForceRedraw()
+        noDraw = False
+        DrawAllButtons()
+        Me.Update()
+    End Sub
+
     Private Sub Button_Resize(ByVal sender As Object, ByVal e As System.EventArgs) Handles MyBase.Resize
         If textHeight = -1 Then
             ButtonTextHeight = -1 'resize the text
@@ -719,10 +728,18 @@ Public Class LCARSbuttonClass
     End Sub
 
     Protected Overrides Sub OnPaint(ByVal e As System.Windows.Forms.PaintEventArgs)
+        ' Always draw into the current control bounds. Drawing at (0,0) with the
+        ' bitmap's native size clips the key art whenever the control is scaled down
+        ' (OSK resize) if Resize/DrawAllButtons did not rebuild the bitmap yet.
+        Dim dest As New Rectangle(0, 0, Me.Width, Me.Height)
         If isLit Xor isFlashing Then
-            e.Graphics.DrawImage(NormalButton, 0, 0)
+            If NormalButton IsNot Nothing Then
+                e.Graphics.DrawImage(NormalButton, dest)
+            End If
         Else
-            e.Graphics.DrawImage(UnLitButton, 0, 0)
+            If UnLitButton IsNot Nothing Then
+                e.Graphics.DrawImage(UnLitButton, dest)
+            End If
         End If
         If textVisible Then
             DrawText(e.Graphics)

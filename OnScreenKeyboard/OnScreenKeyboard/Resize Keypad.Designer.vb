@@ -1,4 +1,4 @@
-﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
+<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
 Partial Class Resize_Keypad
     Inherits System.Windows.Forms.Form
 
@@ -215,8 +215,9 @@ Partial Class Resize_Keypad
         Me.Controls.Add(Me.lblResizeTitle)
         Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None
         Me.Name = "Resize_Keypad"
-        Me.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent
+        Me.StartPosition = System.Windows.Forms.FormStartPosition.Manual
         Me.Text = "Resize_Keypad"
+        Me.TopMost = True
         Me.ResumeLayout(False)
         Me.PerformLayout()
 

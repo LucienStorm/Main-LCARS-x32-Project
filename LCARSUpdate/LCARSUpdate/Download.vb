@@ -1,4 +1,4 @@
-﻿Imports LCARS.UI
+Imports LCARS.UI
 <System.ComponentModel.ToolboxItem(False)> _
 Friend Class Download
     Inherits LCARS.Controls.ProgressBar
@@ -39,73 +39,97 @@ Friend Class Download
         downloadThread.Start()
     End Sub
     Public Sub DownloadSub()
-        Dim request As System.Net.WebRequest
-        Dim response As System.Net.WebResponse = Nothing
-        Dim responseStream As System.IO.Stream
-        Dim length As Integer = 1024
-        Dim byteArray(length) As Byte
         Try
-            request = System.Net.WebRequest.Create(downloadPath)
-            Dim proxy As System.Net.IWebProxy = System.Net.WebRequest.GetSystemWebProxy()
-            proxy.Credentials = System.Net.CredentialCache.DefaultCredentials
-            request.Proxy = proxy
-            response = request.GetResponse()
-            RaiseEvent SizeAcquired(response.ContentLength)
-            responseStream = response.GetResponseStream()
-            Using filestream As System.IO.FileStream = New System.IO.FileStream(savePath, IO.FileMode.OpenOrCreate, IO.FileAccess.Write)
-                Dim tempBytes As Integer
-                Dim totalDownloaded As Long = 0
-                tempBytes = responseStream.Read(byteArray, 0, length)
-                Do
-                    filestream.Write(byteArray, 0, tempBytes)
-                    totalDownloaded += tempBytes
-                    RaiseEvent StatusChanged(totalDownloaded)
-                    tempBytes = responseStream.Read(byteArray, 0, length)
-                Loop While tempBytes <> 0
-            End Using
-            'Check with md5
-            Me.BottomText = "Verifying"
+            If System.IO.File.Exists(savePath) Then
+                System.IO.File.Delete(savePath)
+            End If
+
+            SetBottomTextSafe("Downloading")
+            Dim client As New System.Net.WebClient()
+            WebRequestHelper.ConfigureWebClient(client, downloadPath)
+            client.DownloadFile(downloadPath, savePath)
+
+            Dim fileInfo As New System.IO.FileInfo(savePath)
+            RaiseEvent SizeAcquired(fileInfo.Length)
+            RaiseEvent StatusChanged(fileInfo.Length)
+
+            SetBottomTextSafe("Verifying")
             Dim hashArray As Byte()
             Dim myBuilder As New System.Text.StringBuilder
             Dim hashByte As Byte
             Dim myMD5 As New System.Security.Cryptography.MD5CryptoServiceProvider()
             Using myStream As New System.IO.FileStream(savePath, IO.FileMode.Open, IO.FileAccess.Read)
-                myMD5.ComputeHash(myStream)
+                hashArray = myMD5.ComputeHash(myStream)
             End Using
-            hashArray = myMD5.Hash
             For Each hashByte In hashArray
-                myBuilder.Append(String.Format("{0:X2}", hashByte))
+                myBuilder.Append(String.Format("{0:x2}", hashByte))
             Next
-            If md5 = myBuilder.ToString() Then
+            If String.Equals(md5, myBuilder.ToString(), StringComparison.OrdinalIgnoreCase) Then
                 RaiseEvent DownloadComplete()
             Else
-                BottomText = "File corrupted"
+                SetBottomTextSafe("Hash mismatch")
                 RaiseEvent DownloadFailed()
+                ShowMessageSafe("MD5 mismatch for " & System.IO.Path.GetFileName(savePath) & vbNewLine & _
+                       "Expected: " & md5 & vbNewLine & _
+                       "Got:      " & myBuilder.ToString())
             End If
 
         Catch ex As Exception
-            BottomText = "Failed"
+            SetBottomTextSafe("Failed")
             RaiseEvent DownloadFailed()
-            If Not response Is Nothing Then
-                response.Close()
-            End If
-            MsgBox(ex.ToString())
+            Dim detail As String = "Download failed for:" & vbNewLine & downloadPath & vbNewLine & vbNewLine & ex.ToString()
+            WriteCrashLog(detail)
+            ShowMessageSafe(detail)
+        End Try
+    End Sub
+
+    Private Sub SetBottomTextSafe(ByVal text As String)
+        If Me.InvokeRequired Then
+            Me.BeginInvoke(New StringHandler(AddressOf SetBottomTextSafe), text)
+            Return
+        End If
+        Me.BottomText = text
+    End Sub
+
+    Private Delegate Sub StringHandler(ByVal text As String)
+
+    Private Sub ShowMessageSafe(ByVal text As String)
+        If Me.InvokeRequired Then
+            Me.BeginInvoke(New StringHandler(AddressOf ShowMessageSafe), text)
+            Return
+        End If
+        MsgBox(text)
+    End Sub
+
+    Private Sub WriteCrashLog(ByVal text As String)
+        Try
+            Dim logPath As String = My.Computer.FileSystem.SpecialDirectories.Temp & "\lcars-update-error.txt"
+            System.IO.File.AppendAllText(logPath, DateTime.Now.ToString("u") & vbNewLine & text & vbNewLine & vbNewLine)
+        Catch
         End Try
     End Sub
 
     Public Sub Me_DownloadComplete() Handles Me.DownloadComplete
+        If Me.InvokeRequired Then
+            Me.BeginInvoke(New MethodInvoker(AddressOf MarkDownloadCompleteUi))
+            Return
+        End If
+        MarkDownloadCompleteUi()
+    End Sub
+
+    Private Sub MarkDownloadCompleteUi()
         Me.BottomText = "Completed"
         Me.Value = 1
     End Sub
 
     Public Sub Me_ProgressChanged(ByVal currentProgress As Long) Handles Me.StatusChanged
         If Me.InvokeRequired() Then
-            Me.Invoke(New SingleLongArg(AddressOf Me_ProgressChanged), currentProgress)
-        Else
-            Dim percent As Decimal = currentProgress / downloadSize
-            Me.Value = percent
-            Me.BottomText = (percent * 100).ToString("F") & "% of " & downloadSize & " bytes."
+            Me.BeginInvoke(New SingleLongArg(AddressOf Me_ProgressChanged), currentProgress)
+            Return
         End If
+        Dim percent As Decimal = currentProgress / downloadSize
+        Me.Value = percent
+        Me.BottomText = (percent * 100).ToString("F") & "% of " & downloadSize & " bytes."
     End Sub
 
     Public Sub Me_SizeAcquired(ByVal size As Long) Handles Me.SizeAcquired
@@ -113,6 +137,14 @@ Friend Class Download
     End Sub
 
     Public Sub Me_Failed() Handles Me.DownloadFailed
+        If Me.InvokeRequired Then
+            Me.BeginInvoke(New MethodInvoker(AddressOf Me_FailedUi))
+            Return
+        End If
+        Me_FailedUi()
+    End Sub
+
+    Private Sub Me_FailedUi()
         If Me.RetryCount < CType(GetSetting("LCARSUpdate", "Config", "MaxRetry", "3"), Integer) Then
             RetryCount += 1
             Me.downloadSize = 0

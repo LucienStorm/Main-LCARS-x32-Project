@@ -1,4 +1,4 @@
-﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
+<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
 Partial Class form1
     Inherits LCARS.LCARSForm
 
@@ -30,6 +30,7 @@ Partial Class form1
         Me.FlatButton3 = New LCARS.Controls.FlatButton
         Me.FlatButton4 = New LCARS.Controls.FlatButton
         Me.FlatButton6 = New LCARS.Controls.FlatButton
+        Me.fbSetHome = New LCARS.Controls.FlatButton
         Me.FlatButton7 = New LCARS.Controls.FlatButton
         Me.FlatButton8 = New LCARS.Controls.FlatButton
         Me.Elbow1 = New LCARS.Controls.Elbow
@@ -112,7 +113,7 @@ Partial Class form1
         Me.FlatButton1.ButtonText = "REFRESH PAGE"
         Me.FlatButton1.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.FlatButton1.Color = LCARS.LCARScolorStyles.NavigationFunction
-        Me.FlatButton1.Location = New System.Drawing.Point(24, 293)
+        Me.FlatButton1.Location = New System.Drawing.Point(24, 328)
         Me.FlatButton1.Name = "FlatButton1"
         Me.FlatButton1.Size = New System.Drawing.Size(100, 29)
         Me.FlatButton1.TabIndex = 23
@@ -126,7 +127,7 @@ Partial Class form1
         Me.FlatButton2.ButtonText = "STOP"
         Me.FlatButton2.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.FlatButton2.Color = LCARS.LCARScolorStyles.NavigationFunction
-        Me.FlatButton2.Location = New System.Drawing.Point(24, 258)
+        Me.FlatButton2.Location = New System.Drawing.Point(24, 293)
         Me.FlatButton2.Name = "FlatButton2"
         Me.FlatButton2.Size = New System.Drawing.Size(100, 29)
         Me.FlatButton2.TabIndex = 25
@@ -140,7 +141,7 @@ Partial Class form1
         Me.FlatButton3.ButtonText = "CLOSE"
         Me.FlatButton3.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.FlatButton3.Color = LCARS.LCARScolorStyles.Orange
-        Me.FlatButton3.Location = New System.Drawing.Point(24, 468)
+        Me.FlatButton3.Location = New System.Drawing.Point(24, 503)
         Me.FlatButton3.Name = "FlatButton3"
         Me.FlatButton3.Size = New System.Drawing.Size(100, 29)
         Me.FlatButton3.TabIndex = 26
@@ -154,7 +155,7 @@ Partial Class form1
         Me.FlatButton4.ButtonText = "GOTO WEBSITE"
         Me.FlatButton4.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.FlatButton4.Color = LCARS.LCARScolorStyles.NavigationFunction
-        Me.FlatButton4.Location = New System.Drawing.Point(24, 153)
+        Me.FlatButton4.Location = New System.Drawing.Point(24, 188)
         Me.FlatButton4.Name = "FlatButton4"
         Me.FlatButton4.Size = New System.Drawing.Size(100, 29)
         Me.FlatButton4.TabIndex = 27
@@ -176,17 +177,31 @@ Partial Class form1
         Me.FlatButton6.Text = "HOME PAGE"
         Me.FlatButton6.Visible = False
         '
+        'fbSetHome
+        '
+        Me.fbSetHome.Beeping = True
+        Me.fbSetHome.ButtonText = "SET HOME"
+        Me.fbSetHome.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
+        Me.fbSetHome.Color = LCARS.LCARScolorStyles.NavigationFunction
+        Me.fbSetHome.Location = New System.Drawing.Point(24, 153)
+        Me.fbSetHome.Name = "fbSetHome"
+        Me.fbSetHome.Size = New System.Drawing.Size(100, 29)
+        Me.fbSetHome.TabIndex = 28
+        Me.fbSetHome.Tag = "11"
+        Me.fbSetHome.Text = "SET HOME"
+        Me.fbSetHome.Visible = False
+        '
         'FlatButton7
         '
         Me.FlatButton7.Beeping = True
-        Me.FlatButton7.ButtonText = "NEW TAB"
+        Me.FlatButton7.ButtonText = "NEW WEB"
         Me.FlatButton7.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
-        Me.FlatButton7.Location = New System.Drawing.Point(24, 328)
+        Me.FlatButton7.Location = New System.Drawing.Point(24, 363)
         Me.FlatButton7.Name = "FlatButton7"
         Me.FlatButton7.Size = New System.Drawing.Size(100, 29)
         Me.FlatButton7.TabIndex = 30
         Me.FlatButton7.Tag = "6"
-        Me.FlatButton7.Text = "NEW TAB"
+        Me.FlatButton7.Text = "NEW WEB"
         Me.FlatButton7.Visible = False
         '
         'FlatButton8
@@ -194,7 +209,7 @@ Partial Class form1
         Me.FlatButton8.Beeping = True
         Me.FlatButton8.ButtonText = "CLOSE TAB"
         Me.FlatButton8.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
-        Me.FlatButton8.Location = New System.Drawing.Point(24, 363)
+        Me.FlatButton8.Location = New System.Drawing.Point(24, 398)
         Me.FlatButton8.Name = "FlatButton8"
         Me.FlatButton8.Size = New System.Drawing.Size(100, 29)
         Me.FlatButton8.TabIndex = 31
@@ -204,15 +219,15 @@ Partial Class form1
         '
         'Elbow1
         '
-        Me.Elbow1.ButtonHeight = 44
+        Me.Elbow1.ButtonHeight = 34
         Me.Elbow1.ButtonText = ""
         Me.Elbow1.ButtonTextHeight = 19
-        Me.Elbow1.ButtonWidth = 100
+        Me.Elbow1.ButtonWidth = 72
         Me.Elbow1.Color = LCARS.LCARScolorStyles.LCARSDisplayOnly
         Me.Elbow1.ElbowStyle = LCARS.Controls.Elbow.LCARSelbowStyles.UpperLeft
-        Me.Elbow1.Location = New System.Drawing.Point(24, 18)
+        Me.Elbow1.Location = New System.Drawing.Point(8, 6)
         Me.Elbow1.Name = "Elbow1"
-        Me.Elbow1.Size = New System.Drawing.Size(133, 94)
+        Me.Elbow1.Size = New System.Drawing.Size(96, 44)
         Me.Elbow1.TabIndex = 33
         Me.Elbow1.Tag = "14"
         Me.Elbow1.Visible = False
@@ -252,11 +267,11 @@ Partial Class form1
         Me.ComplexButton1.Location = New System.Drawing.Point(630, 19)
         Me.ComplexButton1.Name = "ComplexButton1"
         Me.ComplexButton1.SideBlockColor = LCARS.LCARScolorStyles.StaticTan
-        Me.ComplexButton1.SideText = " WEB BROWSER"
+        Me.ComplexButton1.SideText = ""
         Me.ComplexButton1.SideTextColor = LCARS.LCARScolorStyles.NavigationFunction
         Me.ComplexButton1.Size = New System.Drawing.Size(303, 44)
         Me.ComplexButton1.TabIndex = 54
-        Me.ComplexButton1.Tag = "18"
+        Me.ComplexButton1.Tag = ""
         Me.ComplexButton1.Visible = False
         '
         'FlatButton9
@@ -291,7 +306,7 @@ Partial Class form1
         Me.FlatButton11.ButtonTextAlign = System.Drawing.ContentAlignment.BottomLeft
         Me.FlatButton11.Clickable = False
         Me.FlatButton11.Color = LCARS.LCARScolorStyles.LCARSDisplayOnly
-        Me.FlatButton11.Location = New System.Drawing.Point(24, 538)
+        Me.FlatButton11.Location = New System.Drawing.Point(24, 573)
         Me.FlatButton11.Name = "FlatButton11"
         Me.FlatButton11.Size = New System.Drawing.Size(99, 229)
         Me.FlatButton11.TabIndex = 57
@@ -319,7 +334,7 @@ Partial Class form1
         Me.Arrowbutton1.ButtonText = "<"
         Me.Arrowbutton1.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.Arrowbutton1.Color = LCARS.LCARScolorStyles.NavigationFunction
-        Me.Arrowbutton1.Location = New System.Drawing.Point(24, 188)
+        Me.Arrowbutton1.Location = New System.Drawing.Point(24, 223)
         Me.Arrowbutton1.Name = "Arrowbutton1"
         Me.Arrowbutton1.Size = New System.Drawing.Size(100, 29)
         Me.Arrowbutton1.TabIndex = 62
@@ -333,7 +348,7 @@ Partial Class form1
         Me.Arrowbutton2.ButtonText = ">"
         Me.Arrowbutton2.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.Arrowbutton2.Color = LCARS.LCARScolorStyles.NavigationFunction
-        Me.Arrowbutton2.Location = New System.Drawing.Point(24, 223)
+        Me.Arrowbutton2.Location = New System.Drawing.Point(24, 258)
         Me.Arrowbutton2.Name = "Arrowbutton2"
         Me.Arrowbutton2.Size = New System.Drawing.Size(100, 29)
         Me.Arrowbutton2.TabIndex = 63
@@ -353,7 +368,7 @@ Partial Class form1
         '
         'ProgressBar1
         '
-        Me.ProgressBar1.Location = New System.Drawing.Point(24, 503)
+        Me.ProgressBar1.Location = New System.Drawing.Point(24, 538)
         Me.ProgressBar1.Name = "ProgressBar1"
         Me.ProgressBar1.Size = New System.Drawing.Size(100, 29)
         Me.ProgressBar1.TabIndex = 68
@@ -365,7 +380,7 @@ Partial Class form1
         Me.FlatButton14.Beeping = True
         Me.FlatButton14.ButtonText = "ZOOM CONTROL"
         Me.FlatButton14.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
-        Me.FlatButton14.Location = New System.Drawing.Point(24, 433)
+        Me.FlatButton14.Location = New System.Drawing.Point(24, 468)
         Me.FlatButton14.Name = "FlatButton14"
         Me.FlatButton14.Size = New System.Drawing.Size(100, 29)
         Me.FlatButton14.TabIndex = 69
@@ -435,7 +450,7 @@ Partial Class form1
         Me.FlatButton12.Beeping = True
         Me.FlatButton12.ButtonText = "BOOKMARKS"
         Me.FlatButton12.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
-        Me.FlatButton12.Location = New System.Drawing.Point(24, 398)
+        Me.FlatButton12.Location = New System.Drawing.Point(24, 433)
         Me.FlatButton12.Name = "FlatButton12"
         Me.FlatButton12.Size = New System.Drawing.Size(100, 29)
         Me.FlatButton12.TabIndex = 75
@@ -773,7 +788,7 @@ Partial Class form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(96.0!, 96.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi
-        Me.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink
+        Me.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowOnly
         Me.AutoValidate = System.Windows.Forms.AutoValidate.EnableAllowFocusChange
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(965, 780)
@@ -797,6 +812,7 @@ Partial Class form1
         Me.Controls.Add(Me.FlatButton4a)
         Me.Controls.Add(Me.Elbow1)
         Me.Controls.Add(Me.FlatButton6)
+        Me.Controls.Add(Me.fbSetHome)
         Me.Controls.Add(Me.FlatButton4)
         Me.Controls.Add(Me.FlatButton8)
         Me.Controls.Add(Me.FlatButton7)
@@ -824,6 +840,7 @@ Partial Class form1
     Friend WithEvents FlatButton3 As LCARS.Controls.FlatButton
     Friend WithEvents FlatButton4 As LCARS.Controls.FlatButton
     Friend WithEvents FlatButton6 As LCARS.Controls.FlatButton
+    Friend WithEvents fbSetHome As LCARS.Controls.FlatButton
     Friend WithEvents FlatButton7 As LCARS.Controls.FlatButton
     Friend WithEvents FlatButton8 As LCARS.Controls.FlatButton
     Friend WithEvents Elbow1 As LCARS.Controls.Elbow

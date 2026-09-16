@@ -32,16 +32,25 @@ Public Class frmStartup
             'can close too.
             If m.LParam = 1 Then
                 'They are registering their program with x32 so they can receive resize and close notices.
-                'Save their handle so we can send a message to them when 
-                'the working area has changed or x32 is closing (if that handle isn't in the list already).
                 Dim targetWnd As IntPtr = m.WParam
-                LinkedWindows.Add(m.WParam)
+                If Not LinkedWindows.Contains(targetWnd) Then
+                    LinkedWindows.Add(targetWnd)
+                End If
                 'Send them the window handle for x32 so they can communicate directly, otherwise they have
                 'to broadcast the message to all windows.
                 PostMessage(targetWnd, InterMsgID, Me.Handle, 2)
             ElseIf m.LParam = 2 Then
                 'They are telling this instance to load settings.
                 curBusiness(0).mySettingsButton_Click(Nothing, Nothing)
+            ElseIf m.LParam = 21 Then
+                ' Explorer (or other) asked to refresh LCARS Start after pin/layout change.
+                m.Result = 1
+                For Each b As modBusiness In curBusiness
+                    If b IsNot Nothing Then
+                        b.ReloadStartMenuData(rebuildFromDisk:=True)
+                        b.RefreshStartMenuPrograms()
+                    End If
+                Next
             End If
 
             'WM_COPYDATA is used when more than just a number needs to be sent to x32.
@@ -85,8 +94,9 @@ Public Class frmStartup
                     'We got the message
                     m.Result = 1
 
-                    'Close LCARS (pretty self explainitory)
-                    CloseLCARS()
+                    ' Close asynchronously so LCARSshutdown's SendMessage can return.
+                    ' Calling CloseLCARS inline deadlocks when shutdown waits on this thread.
+                    BeginInvoke(New MethodInvoker(AddressOf CloseLCARS))
                 Case 6
                     'Start a Red Alert
                     'This is deprecated, but kept for backwards compatibility.
@@ -146,16 +156,29 @@ Public Class frmStartup
     End Sub
 
     Private Sub frmStartup_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+        Try
+            LoadLcarsShell()
+        Catch ex As Exception
+            Try
+                System.IO.File.WriteAllText( _
+                    My.Computer.FileSystem.SpecialDirectories.Desktop & "\LCARSError.txt", _
+                    Now.ToString() & vbNewLine & ex.ToString())
+            Catch
+            End Try
+            modShellFallback.EnsureExplorerRunning()
+            Throw
+        End Try
+    End Sub
+
+    Private Sub LoadLcarsShell()
         '''''''''''''''''''''''''''''''''''''''
         '''' Critical LCARS initialization ''''
         '''''''''''''''''''''''''''''''''''''''
         CheckComponents()
+        ' WebView2 install is handled by LCARSWebBrowser on first open — never block shell startup.
         If Command().Contains("-u") Then
-            Try
-                My.Computer.FileSystem.DeleteFile(My.Computer.FileSystem.SpecialDirectories.Temp & "\runInstallScript.exe")
-                My.Computer.FileSystem.DeleteFile(My.Computer.FileSystem.SpecialDirectories.Temp & "\Ionic.Zip.Reduced.dll")
-            Catch ex As Exception
-            End Try
+            modUpdateStaging.CleanupAfterUpdateRestart()
+            modShellFallback.CleanupOrphanShellProcesses()
         End If
         If modSettings.InstallPath = "" Then
             modSettings.InstallPath = Application.StartupPath
@@ -221,6 +244,10 @@ Public Class frmStartup
             CreateDesktop(i)
             loadForm(i)
         Next
+        If modShellFallback.IsLcarsRegisteredShell() Then
+            modShellFallback.CleanupOrphanShellProcesses()
+            modShellFallback.ScheduleOrphanShellCleanup()
+        End If
         mainTimer.Start()
         AddHandler Microsoft.Win32.SystemEvents.DisplaySettingsChanged, AddressOf System_DisplayChanged
 
@@ -316,6 +343,7 @@ Public Class frmStartup
             'Use standard message box because there's no telling if LCARS.dll was deleted.
             Microsoft.VisualBasic.MsgBox("Critical files have been deleted. LCARS x32 is either unable to start, or unable to shut down after being started. " _
                                          & "Reinstalling should fix this problem." & vbNewLine & vbNewLine & "Program will exit.", MsgBoxStyle.Critical, "Fatal error")
+            modShellFallback.EnsureExplorerRunning()
             End
         End If
     End Sub

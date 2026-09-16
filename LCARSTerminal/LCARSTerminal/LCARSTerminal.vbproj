@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProjectGuid>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <StartupObject>LCARSTerminal.My.MyApplication</StartupObject>
+    <RootNamespace>LCARSTerminal</RootNamespace>
+    <AssemblyName>LCARSTerminal</AssemblyName>
+    <FileAlignment>512</FileAlignment>
+    <MyType>WindowsForms</MyType>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFrameworkProfile />
+    <OptionExplicit>On</OptionExplicit>
+    <OptionCompare>Binary</OptionCompare>
+    <OptionStrict>On</OptionStrict>
+    <OptionInfer>On</OptionInfer>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Debug\</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="AxMSTSCLib">
+      <HintPath>lib\AxMSTSCLib.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="LCARS">
+      <HintPath>..\..\LCARSbuttons\LCARSbuttons\bin\Debug\LCARS.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="MSTSCLib">
+      <HintPath>lib\MSTSCLib.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Import Include="Microsoft.VisualBasic" />
+    <Import Include="System" />
+    <Import Include="System.Collections" />
+    <Import Include="System.Collections.Generic" />
+    <Import Include="System.Diagnostics" />
+    <Import Include="System.Drawing" />
+    <Import Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Protocol\ShellKind.vb">
+      <Link>Protocol\ShellKind.vb</Link>
+    </Compile>
+    <Compile Include="frmTerminal.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmShellPicker.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ConsoleNative.vb" />
+    <Compile Include="ConsoleHostView.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Rdp\RdpConnectionProfile.vb" />
+    <Compile Include="Rdp\RdpProfileStore.vb" />
+    <Compile Include="Rdp\RdpFileCodec.vb" />
+    <Compile Include="Rdp\RdpCredentialStore.vb" />
+    <Compile Include="Rdp\RdpClientHost.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Rdp\RdpConnectionListPanel.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Rdp\RdpWorkspace.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Rdp\frmRdpCredentials.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="My Project\AssemblyInfo.vb" />
+    <Compile Include="My Project\Application.Designer.vb">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Application.myapp</DependentUpon>
+    </Compile>
+    <Compile Include="My Project\MyApplication.vb" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="My Project\Application.myapp">
+      <Generator>MyApplicationCodeGenerator</Generator>
+      <LastGenOutput>Application.Designer.vb</LastGenOutput>
+    </None>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
+</Project>

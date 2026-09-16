@@ -1,4 +1,4 @@
-﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
+<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
 Partial Class frmMyComp
     Inherits LCARS.LCARSForm
 
@@ -21,6 +21,7 @@ Partial Class frmMyComp
     Private Sub InitializeComponent()
         Me.pnlVisible = New System.Windows.Forms.Panel
         Me.sbOpenWith = New LCARS.Controls.StandardButton
+        Me.sbPinToStart = New LCARS.Controls.StandardButton
         Me.sbFormat = New LCARS.Controls.StandardButton
         Me.sbNewFolder = New LCARS.Controls.StandardButton
         Me.sbEdit = New LCARS.Controls.StandardButton
@@ -61,12 +62,13 @@ Partial Class frmMyComp
         Me.pnlVisible.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
                     Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.pnlVisible.Controls.Add(Me.sbOpenWith)
+        Me.pnlVisible.Controls.Add(Me.sbPinToStart)
         Me.pnlVisible.Controls.Add(Me.sbFormat)
         Me.pnlVisible.Controls.Add(Me.sbNewFolder)
         Me.pnlVisible.Controls.Add(Me.sbEdit)
         Me.pnlVisible.Location = New System.Drawing.Point(533, 241)
         Me.pnlVisible.Name = "pnlVisible"
-        Me.pnlVisible.Size = New System.Drawing.Size(87, 281)
+        Me.pnlVisible.Size = New System.Drawing.Size(87, 320)
         Me.pnlVisible.TabIndex = 54
         '
         'sbOpenWith
@@ -80,6 +82,18 @@ Partial Class frmMyComp
         Me.sbOpenWith.Size = New System.Drawing.Size(87, 26)
         Me.sbOpenWith.TabIndex = 42
         Me.sbOpenWith.Text = "OPEN WITH"
+        '
+        'sbPinToStart
+        '
+        Me.sbPinToStart.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.sbPinToStart.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
+        Me.sbPinToStart.ButtonText = "PIN START"
+        Me.sbPinToStart.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
+        Me.sbPinToStart.Location = New System.Drawing.Point(0, 128)
+        Me.sbPinToStart.Name = "sbPinToStart"
+        Me.sbPinToStart.Size = New System.Drawing.Size(87, 26)
+        Me.sbPinToStart.TabIndex = 43
+        Me.sbPinToStart.Text = "PIN START"
         '
         'sbFormat
         '
@@ -317,17 +331,17 @@ Partial Class frmMyComp
         '
         'sbClose
         '
-        Me.sbClose.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.sbClose.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
-        Me.sbClose.ButtonText = "X"
-        Me.sbClose.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
-        Me.sbClose.ButtonTextHeight = 20
+        Me.sbClose.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.sbClose.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
+        Me.sbClose.ButtonText = "CLOSE"
+        Me.sbClose.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
+        Me.sbClose.ButtonTextHeight = 14
         Me.sbClose.Color = LCARS.LCARScolorStyles.FunctionOffline
-        Me.sbClose.Location = New System.Drawing.Point(607, 4)
+        Me.sbClose.Location = New System.Drawing.Point(532, 526)
         Me.sbClose.Name = "sbClose"
-        Me.sbClose.Size = New System.Drawing.Size(29, 29)
+        Me.sbClose.Size = New System.Drawing.Size(100, 28)
         Me.sbClose.TabIndex = 54
-        Me.sbClose.Text = "X"
+        Me.sbClose.Text = "CLOSE"
         '
         'sbGoTo
         '
@@ -454,9 +468,9 @@ Partial Class frmMyComp
         Me.elbActionsBottom.Clickable = False
         Me.elbActionsBottom.Color = LCARS.LCARScolorStyles.SystemFunction
         Me.elbActionsBottom.ElbowStyle = LCARS.Controls.Elbow.LCARSelbowStyles.LowerLeft
-        Me.elbActionsBottom.Location = New System.Drawing.Point(522, 518)
+        Me.elbActionsBottom.Location = New System.Drawing.Point(522, 448)
         Me.elbActionsBottom.Name = "elbActionsBottom"
-        Me.elbActionsBottom.Size = New System.Drawing.Size(113, 39)
+        Me.elbActionsBottom.Size = New System.Drawing.Size(113, 32)
         Me.elbActionsBottom.TabIndex = 50
         '
         'gridMyComp
@@ -522,6 +536,7 @@ Partial Class frmMyComp
     Friend WithEvents pnlEdit As System.Windows.Forms.Panel
     Friend WithEvents sbNewFolder As LCARS.Controls.StandardButton
     Friend WithEvents sbOpenWith As LCARS.Controls.StandardButton
+    Friend WithEvents sbPinToStart As LCARS.Controls.StandardButton
     Friend WithEvents sbFormat As LCARS.Controls.StandardButton
     Friend WithEvents sbEdit As LCARS.Controls.StandardButton
     Friend WithEvents sbGoTo As LCARS.Controls.StandardButton

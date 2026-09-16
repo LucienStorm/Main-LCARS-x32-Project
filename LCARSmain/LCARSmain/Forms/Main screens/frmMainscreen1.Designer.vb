@@ -1,4 +1,4 @@
-﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
+<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
 Partial Class frmMainscreen1
     Inherits System.Windows.Forms.Form
 
@@ -103,6 +103,7 @@ Partial Class frmMainscreen1
         Me.myRun = New LCARS.Controls.FlatButton
         Me.fbMyNetwork = New LCARS.Controls.FlatButton
         Me.fbWebBrowser = New LCARS.Controls.FlatButton
+        Me.fbTerminal = New LCARS.Controls.FlatButton
         Me.myVideos = New LCARS.Controls.FlatButton
         Me.myMusic = New LCARS.Controls.FlatButton
         Me.pnlMainContainer.SuspendLayout()
@@ -422,6 +423,7 @@ Partial Class frmMainscreen1
         '
         'fbClock
         '
+        ' Top speech-row fill: Left|Right stretches from after SPEECH to PERSONAL (stub is HalfPillButton3).
         Me.fbClock.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Left) _
                     Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.fbClock.ButtonText = ""
@@ -549,6 +551,7 @@ Partial Class frmMainscreen1
         '
         'FlatButton7
         '
+        ' Bottom chrome at y=100 (original): Left|Right keeps design margins; starts at 390 (inset vs top row).
         Me.FlatButton7.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Left) _
                     Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.FlatButton7.ButtonText = ""
@@ -1062,6 +1065,7 @@ Partial Class frmMainscreen1
         Me.pnlStart.Controls.Add(Me.myRun)
         Me.pnlStart.Controls.Add(Me.fbMyNetwork)
         Me.pnlStart.Controls.Add(Me.fbWebBrowser)
+        Me.pnlStart.Controls.Add(Me.fbTerminal)
         Me.pnlStart.Controls.Add(Me.myVideos)
         Me.pnlStart.Controls.Add(Me.myMusic)
         Me.pnlStart.Location = New System.Drawing.Point(0, 0)
@@ -1185,9 +1189,9 @@ Partial Class frmMainscreen1
         Me.FlatButton30.Clickable = False
         Me.FlatButton30.Color = LCARS.LCARScolorStyles.LCARSDisplayOnly
         Me.FlatButton30.FlashInterval = 0
-        Me.FlatButton30.Location = New System.Drawing.Point(0, 283)
+        Me.FlatButton30.Location = New System.Drawing.Point(0, 309)
         Me.FlatButton30.Name = "FlatButton30"
-        Me.FlatButton30.Size = New System.Drawing.Size(101, 238)
+        Me.FlatButton30.Size = New System.Drawing.Size(101, 212)
         Me.FlatButton30.TabIndex = 11
         Me.FlatButton30.Tag = "3"
         '
@@ -1332,6 +1336,19 @@ Partial Class frmMainscreen1
         Me.fbWebBrowser.Tag = "10"
         Me.fbWebBrowser.Text = "WEB BROWSER"
         '
+        'fbTerminal
+        '
+        Me.fbTerminal.ButtonText = "TERMINAL"
+        Me.fbTerminal.ButtonTextAlign = System.Drawing.ContentAlignment.TopRight
+        Me.fbTerminal.Color = LCARS.LCARScolorStyles.NavigationFunction
+        Me.fbTerminal.FlashInterval = 0
+        Me.fbTerminal.Location = New System.Drawing.Point(0, 283)
+        Me.fbTerminal.Name = "fbTerminal"
+        Me.fbTerminal.Size = New System.Drawing.Size(100, 20)
+        Me.fbTerminal.TabIndex = 52
+        Me.fbTerminal.Tag = "11"
+        Me.fbTerminal.Text = "TERMINAL"
+        '
         'myVideos
         '
         Me.myVideos.ButtonText = "MY VIDEOS"
@@ -1417,6 +1434,7 @@ Partial Class frmMainscreen1
     Friend WithEvents Elbow3 As LCARS.Controls.Elbow
     Friend WithEvents myRun As LCARS.Controls.FlatButton
     Friend WithEvents fbWebBrowser As LCARS.Controls.FlatButton
+    Friend WithEvents fbTerminal As LCARS.Controls.FlatButton
     Friend WithEvents FlatButton13 As LCARS.Controls.FlatButton
     Friend WithEvents Elbow5 As LCARS.Controls.Elbow
     Friend WithEvents myDestruct As LCARS.Controls.FlatButton

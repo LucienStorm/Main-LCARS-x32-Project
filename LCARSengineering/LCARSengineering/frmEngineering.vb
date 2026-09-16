@@ -5,6 +5,10 @@ Public Class frmEngineering
     Dim myWMI As Object
     Dim WMIavailable As Boolean = False
 
+    Protected Overrides Sub OnShellChromeLayout()
+        PlaceShellAlignedCloseButton(sbExitMyComp)
+    End Sub
+
     Private Sub tmrSysMon_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles tmrSysMon.Tick
         'FileOpen(1, Application.StartupPath & "\eLog.txt", OpenMode.Output)
         Dim val As Integer = pData.getCPU

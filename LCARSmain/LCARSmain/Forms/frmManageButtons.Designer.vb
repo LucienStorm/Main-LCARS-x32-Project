@@ -246,16 +246,16 @@ Partial Class frmManageButtons
         '
         'sbExitMyComp
         '
-        Me.sbExitMyComp.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.sbExitMyComp.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
-        Me.sbExitMyComp.ButtonText = "X"
+        Me.sbExitMyComp.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.sbExitMyComp.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
+        Me.sbExitMyComp.ButtonText = "CLOSE"
         Me.sbExitMyComp.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.sbExitMyComp.Color = LCARS.LCARScolorStyles.FunctionOffline
-        Me.sbExitMyComp.Location = New System.Drawing.Point(596, 3)
+        Me.sbExitMyComp.Location = New System.Drawing.Point(532, 444)
         Me.sbExitMyComp.Name = "sbExitMyComp"
-        Me.sbExitMyComp.Size = New System.Drawing.Size(33, 32)
+        Me.sbExitMyComp.Size = New System.Drawing.Size(100, 28)
         Me.sbExitMyComp.TabIndex = 87
-        Me.sbExitMyComp.Text = "X"
+        Me.sbExitMyComp.Text = "CLOSE"
         '
         'sbTitle
         '

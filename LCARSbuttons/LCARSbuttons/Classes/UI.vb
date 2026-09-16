@@ -81,36 +81,16 @@ Friend Class LCARSMessageBoxForm
         NoVis = False
 
 
-        ' enumeration splitter
-        'buttons
+        ' enumeration splitter — button type lives in the low 3 bits (0-5)
         Dim butstyle(4) As Integer
-        For ii As MsgBoxStyle = 0 To 5
-            If (buttons And ii) <> 0 Then
-                butstyle(0) = buttons And ii
-            End If
-        Next
-        'style
-        For ii As MsgBoxStyle = 16 To 64 Step 16
-            If (buttons And ii) <> 0 Then
-                butstyle(1) = buttons And ii
-            End If
-        Next
-        'default button
-        For ii As MsgBoxStyle = 256 To 768 Step 256
-            If (buttons And ii) <> 0 Then
-                butstyle(2) = buttons And ii
-            End If
-        Next
-        'system modal
+        butstyle(0) = CInt(buttons) And 7
+        If butstyle(0) > 5 Then butstyle(0) = 0
+        butstyle(1) = CInt(buttons) And &H70
+        butstyle(2) = CInt(buttons) And &H700
         If (buttons And MsgBoxStyle.SystemModal) <> 0 Then
-            butstyle(3) = buttons And MsgBoxStyle.SystemModal
+            butstyle(3) = CInt(MsgBoxStyle.SystemModal)
         End If
-        'Special args
-        For ii As MsgBoxStyle = MsgBoxStyle.MsgBoxHelp To MsgBoxStyle.MsgBoxRtlReading Step MsgBoxStyle.MsgBoxHelp
-            If (buttons And ii) <> 0 Then
-                butstyle(4) = buttons And ii
-            End If
-        Next
+        butstyle(4) = CInt(buttons) And &H3C00
         ' end unumeration splitter
 
         Select Case butstyle(0)

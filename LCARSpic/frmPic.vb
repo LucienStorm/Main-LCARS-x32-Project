@@ -31,6 +31,10 @@ Public Class frmPic
 
     End Sub
 
+    Protected Overrides Sub OnShellChromeLayout()
+        PlaceShellAlignedCloseButton(sbExit)
+    End Sub
+
     Private Sub loadImages(ByVal curIndex As Integer)
         If myFiles.Count > 0 Then
             Dim lastIndex As Integer

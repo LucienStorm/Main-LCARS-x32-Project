@@ -9,6 +9,10 @@ Public Class frmManageButtons
         myBusiness = Business
     End Sub
 
+    Protected Overrides Sub OnShellChromeLayout()
+        PlaceShellAlignedCloseButton(sbExitMyComp)
+    End Sub
+
     Private Sub sbUBbrowse_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbUBbrowse.Click
 
         Dim myfile As New OpenFileDialog
@@ -16,7 +20,7 @@ Public Class frmManageButtons
 
         result = myfile.ShowDialog
 
-        If result = Windows.Forms.DialogResult.OK Then
+        If result = System.Windows.Forms.DialogResult.OK Then
             txtUBLoc.Text = myfile.FileName
         End If
     End Sub

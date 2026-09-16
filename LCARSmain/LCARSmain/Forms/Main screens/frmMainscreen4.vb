@@ -23,17 +23,15 @@ Public Class frmMainscreen4
         End If
     End Sub
 
+    Private Sub myUserButtons_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles myUserButtons.Click
+        If gridUserButtons Is Nothing Then Return
+        myBusiness.TogglePersonalPrograms(Not gridUserButtons.Visible, gridUserButtons.Width)
+    End Sub
+
     Public Shared ReadOnly Property ScreenImage() As Image
         Get
             Return My.Resources.frmmainscreen4
         End Get
     End Property
 
-    Private Sub myUserButtons_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles myUserButtons.Click
-        If gridUserButtons.Visible Then
-            pnlMain.Width += gridUserButtons.Width + 6
-        Else
-            pnlMain.Width -= gridUserButtons.Width + 6
-        End If
-    End Sub
 End Class

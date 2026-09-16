@@ -20,19 +20,20 @@ Public Class frmMainscreen2
         If pnlStart.Visible Then
             pnlMain.Left += pnlStart.Width + 6
             pnlMain.Width -= pnlStart.Width + 6
+            myBusiness.RefreshStartMenuPrograms()
         Else
             pnlMain.Left -= pnlStart.Width + 6
             pnlMain.Width += pnlStart.Width + 6
         End If
     End Sub
 
-    Private Sub fbUserButtons_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles myUserButtons.Click
-        fbUBEndcap.Visible = Not gridUserButtons.Visible
-        If gridUserButtons.Visible Then
-            pnlMain.Width += gridUserButtons.Width + 6
-        Else
-            pnlMain.Width -= gridUserButtons.Width + 6
+    Private Sub myUserButtons_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles myUserButtons.Click
+        If gridUserButtons Is Nothing Then Return
+        Dim opening As Boolean = Not gridUserButtons.Visible
+        If fbUBEndcap IsNot Nothing Then
+            fbUBEndcap.Visible = Not opening
         End If
+        myBusiness.TogglePersonalPrograms(opening, gridUserButtons.Width)
     End Sub
 
     Private Sub abExpand_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles abExpand.Click
@@ -68,6 +69,8 @@ Public Class frmMainscreen2
             pnlTray.Left = pnlTopPanel.Width - pnlTray.Width - 40
             pnlApps.Width = pnlTray.Left - pnlApps.Left
         End If
+        modHudWeather.RebindClockLayout(myBusiness)
+        modQuickControls.ScheduleSyncQuickButton(myBusiness)
     End Sub
 
     Private Sub pnlMainElbow_Resize(ByVal sender As Object, ByVal e As System.EventArgs) Handles pnlMainElbow.Resize

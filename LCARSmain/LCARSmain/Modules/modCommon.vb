@@ -153,6 +153,8 @@ Module modCommon
 
     Public Const SW_HIDE As Integer = 0
     Public Const SW_SHOW As Integer = 5
+    Public Const SW_SHOWNOACTIVATE As Integer = 4
+    Public Const SW_RESTORE As Integer = 9
 
 #End Region
 
@@ -169,6 +171,20 @@ Module modCommon
 #Region " Inter-Window Communications "
 
     Public Declare Auto Function SendMessage Lib "user32.dll" (ByVal hWnd As IntPtr, ByVal msg As UInteger, ByVal wParam As Integer, ByVal lParam As IntPtr) As Integer
+    Public Declare Function IsWindow Lib "user32" (ByVal hWnd As IntPtr) As Boolean
+    Public Declare Function SendMessageTimeout Lib "user32" Alias "SendMessageTimeoutW" (
+        ByVal hWnd As IntPtr,
+        ByVal msg As UInteger,
+        ByVal wParam As IntPtr,
+        ByVal lParam As IntPtr,
+        ByVal fuFlags As UInteger,
+        ByVal uTimeout As UInteger,
+        ByRef lpdwResult As IntPtr) As Boolean
+
+    Private Const SMTO_ABORTIFHUNG As UInteger = &H2
+    ' 250ms was too aggressive — RDP ActiveX / WebView2 stalls dropped apps from LinkedWindows,
+    ' so Terminal stopped resizing with the LCARS menu/working area.
+    Private Const LinkedWindowNotifyTimeoutMs As UInteger = 1500
     Public InterMsgID As UInteger
     Public HWND_BROADCAST As New IntPtr(&HFFFF)
     Public Const WM_EXPLORER_CLOSE As Integer = &H5B4
@@ -209,6 +225,7 @@ Module modCommon
     Public Declare Auto Function GetWindowText Lib "user32" (ByVal hwnd As Integer, ByVal lpString As String, ByVal cch As Integer) As Integer
     Public Declare Auto Function GetWindowTextLength Lib "user32" (ByVal hwnd As Int32) As Integer
     Declare Function IsWindowVisible Lib "user32" (ByVal hwnd As Integer) As Boolean
+    Declare Function IsIconic Lib "user32" (ByVal hwnd As Integer) As Boolean
     '
     ' Constants used with APIs
     '
@@ -522,6 +539,14 @@ Public Enum SetWindowPosFlags As UInteger
         LCARS.UpdateColors(modSpeech.console)
         LCARS.UpdateColors(frmAlerts)
 
+        ' Weather is a plain Label — UpdateColors only hits LCARS buttons. Re-sync so the
+        ' fill behind weather matches the new StaticTan immediately.
+        For Each myBusiness As modBusiness In curBusiness
+            If myBusiness.isInit AndAlso myBusiness.hasWeather Then
+                modHudWeather.SyncWeatherLayoutPublic(myBusiness)
+            End If
+        Next
+
         PostMessage(HWND_BROADCAST, InterMsgID, 0, 2)
     End Sub
 
@@ -594,6 +619,7 @@ Public Enum SetWindowPosFlags As UInteger
     End Function
 
     Public Sub resizeWorkingArea(ByVal x As Integer, ByVal y As Integer, ByVal width As Integer, ByVal height As Integer)
+        modDiagnostics.LogInfo("modCommon.resizeWorkingArea", "x=" & x & " y=" & y & " w=" & width & " h=" & height & " shellMode=" & shellMode)
         Dim myArea As New RECT
         myArea.Left = x
         myArea.Top = y
@@ -628,6 +654,24 @@ Public Enum SetWindowPosFlags As UInteger
         '''' Close LCARS interface ''''
         '''''''''''''''''''''''''''''''
         PostMessage(HWND_BROADCAST, InterMsgID, myDesktop.Handle, 13)
+
+        ' Close in-process forms (Settings, choosers) so the shell isn't stuck behind them.
+        Try
+            Dim open As New List(Of Form)
+            For Each f As Form In Application.OpenForms
+                If f IsNot Nothing AndAlso Not f.IsDisposed AndAlso Not Object.ReferenceEquals(f, myDesktop) Then
+                    open.Add(f)
+                End If
+            Next
+            For Each f As Form In open
+                Try
+                    f.Close()
+                Catch
+                End Try
+            Next
+        Catch
+        End Try
+
         CancelAlert()
         For Each myBusiness As modBusiness In curBusiness
             myBusiness.ShutdownScreen()
@@ -685,9 +729,75 @@ Public Enum SetWindowPosFlags As UInteger
     End Function
 
     Public Sub updateDesktopBounds(ByVal ScreenIndex As Integer, ByVal newBounds As Rectangle)
+        modDiagnostics.LogInfo("modCommon.updateDesktopBounds", "screen=" & ScreenIndex & " bounds=" & newBounds.ToString())
         myDesktop.curDesktop(ScreenIndex).Bounds = _
             New Rectangle(myDesktop.PointToClient(newBounds.Location), _
                           newBounds.Size)
+    End Sub
+
+    ''' <summary>
+    ''' Tells registered LCARS apps about a working-area change without blocking the shell UI thread.
+    ''' </summary>
+    Public Sub NotifyLinkedWindowsWorkingArea(ByVal adjustedBounds As Rectangle, ByVal sourceMonitor As Integer)
+        If LinkedWindows.Count = 0 Then Return
+
+        modDiagnostics.LogInfo("modCommon.NotifyLinkedWindowsWorkingArea",
+            "count=" & LinkedWindows.Count & " bounds=" & adjustedBounds.ToString())
+
+        Dim myRectData As New COPYDATASTRUCT
+        myRectData.dwData = 100
+        myRectData.cdData = Marshal.SizeOf(GetType(Rectangle))
+
+        Dim rectPtr As IntPtr = Marshal.AllocCoTaskMem(myRectData.cdData)
+        Marshal.StructureToPtr(adjustedBounds, rectPtr, False)
+        myRectData.lpData = rectPtr
+
+        Dim copyDataPtr As IntPtr = Marshal.AllocCoTaskMem(Marshal.SizeOf(GetType(COPYDATASTRUCT)))
+        Marshal.StructureToPtr(myRectData, copyDataPtr, False)
+
+        Try
+            Dim i As Integer = LinkedWindows.Count - 1
+            While i >= 0
+                Dim targetHwnd As IntPtr = LinkedWindows(i)
+                If targetHwnd = IntPtr.Zero OrElse Not IsWindow(targetHwnd) Then
+                    modDiagnostics.LogWarn("modCommon.NotifyLinkedWindowsWorkingArea", "dropping dead hwnd=" & targetHwnd.ToString())
+                    LinkedWindows.RemoveAt(i)
+                    i -= 1
+                    Continue While
+                End If
+
+                Dim targetMonitor As Integer = MonitorFromWindow(targetHwnd, MONITOR_DEFAULTTONEAREST)
+                If sourceMonitor <> targetMonitor Then
+                    i -= 1
+                    Continue While
+                End If
+
+                modDiagnostics.LogTouch("LinkedWindows", "notify hwnd=" & targetHwnd.ToString())
+                Dim sendResult As IntPtr = IntPtr.Zero
+                Dim timedOut As Boolean = Not SendMessageTimeout(
+                    targetHwnd,
+                    WM_COPYDATA,
+                    myDesktop.Handle,
+                    copyDataPtr,
+                    SMTO_ABORTIFHUNG,
+                    LinkedWindowNotifyTimeoutMs,
+                    sendResult)
+
+                If timedOut OrElse sendResult = IntPtr.Zero Then
+                    modDiagnostics.LogWarn("modCommon.NotifyLinkedWindowsWorkingArea",
+                        "hwnd=" & targetHwnd.ToString() & " timedOut=" & timedOut.ToString() & " res=" & sendResult.ToString())
+                    ' Do not drop on timeout — a busy RDP/browser UI must keep receiving later resizes.
+                    ' Dead windows are removed above via IsWindow.
+                Else
+                    modDiagnostics.LogInfo("modCommon.NotifyLinkedWindowsWorkingArea",
+                        "hwnd=" & targetHwnd.ToString() & " res=" & sendResult.ToString())
+                End If
+                i -= 1
+            End While
+        Finally
+            Marshal.FreeCoTaskMem(copyDataPtr)
+            Marshal.FreeCoTaskMem(rectPtr)
+        End Try
     End Sub
 
     Public Sub setDoubleBuffered(ByVal c As Control)

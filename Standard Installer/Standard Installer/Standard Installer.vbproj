@@ -1,5 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="3.5" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)build\LCARS.Build.props') And !Exists('$(MSBuildThisFileDirectory)..\build\LCARS.Build.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -12,7 +15,7 @@
     <AssemblyName>Standard Installer</AssemblyName>
     <FileAlignment>512</FileAlignment>
     <MyType>WindowsForms</MyType>
-    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <OptionExplicit>On</OptionExplicit>
     <OptionCompare>Binary</OptionCompare>
     <OptionStrict>Off</OptionStrict>
@@ -40,7 +43,7 @@
   <ItemGroup>
     <Reference Include="Ionic.Zip.Reduced, Version=1.9.1.8, Culture=neutral, PublicKeyToken=edbe51ad942a3f5c, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\DotNetZipLib-DevKit-v1.9\zip-v1.9-Reduced\Debug\Ionic.Zip.Reduced.dll</HintPath>
+      <HintPath>..\..\LCARSmain\LCARSmain\bin\Debug\Ionic.Zip.Reduced.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
@@ -58,7 +61,6 @@
     <Import Include="System.Drawing" />
     <Import Include="System.Diagnostics" />
     <Import Include="System.Windows.Forms" />
-    <Import Include="System.Xml.Linq" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Form1.vb">
@@ -108,16 +110,7 @@
       <LastGenOutput>Settings.Designer.vb</LastGenOutput>
     </None>
     <None Include="Resources\CurrentVersion.zip" />
-  </ItemGroup>
-  <ItemGroup>
-    <COMReference Include="IWshRuntimeLibrary">
-      <Guid>{F935DC20-1CF0-11D0-ADB9-00C04FD58A0B}</Guid>
-      <VersionMajor>1</VersionMajor>
-      <VersionMinor>0</VersionMinor>
-      <Lcid>0</Lcid>
-      <WrapperTool>tlbimp</WrapperTool>
-      <Isolated>False</Isolated>
-    </COMReference>
+    <None Include="app.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

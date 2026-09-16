@@ -1,4 +1,4 @@
-﻿Public Class TaskbarItem
+Public Class TaskbarItem
     Dim _closeButton As LCARS.Controls.FlatButton
     Dim _windowButton As LCARS.Controls.HalfPillButton
     Dim _index As Integer
@@ -45,8 +45,9 @@
         Set(ByVal value As Integer)
             If value < 0 Then Throw New ArgumentOutOfRangeException
             _index = value
-            _closeButton.Left = (_index + _offset) * 134 + 31
-            _windowButton.Left = (_index + _offset) * 134 + 56
+            ' Scroll arrows live on the far right; tasks fill from the left.
+            _closeButton.Left = (_index + _offset) * 134
+            _windowButton.Left = (_index + _offset) * 134 + 25
         End Set
     End Property
 

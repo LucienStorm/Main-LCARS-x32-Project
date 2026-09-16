@@ -32,7 +32,18 @@ Namespace My
         
         <Global.System.Diagnostics.DebuggerStepThroughAttribute()>  _
         Protected Overrides Sub OnCreateMainForm()
-            Me.MainForm = Global.runInstallScript.Installing
+            Try
+                EarlyLog.WriteStartupBreadcrumb()
+                Me.MainForm = Global.runInstallScript.Installing
+            Catch ex As Exception
+                EarlyLog.WriteException("OnCreateMainForm", ex)
+                Throw
+            End Try
         End Sub
+
+        Protected Overrides Function OnUnhandledException(ByVal e As Global.Microsoft.VisualBasic.ApplicationServices.UnhandledExceptionEventArgs) As Boolean
+            EarlyLog.WriteException("UnhandledException", e.Exception)
+            Return MyBase.OnUnhandledException(e)
+        End Function
     End Class
 End Namespace
