@@ -24,12 +24,18 @@ Public Class frmPic
     Private pnlMusic As Panel
     Private lblNowPlaying As Label
     Private fbPlayPause As LCARS.Controls.StandardButton
+    Private fbSlideSettings As LCARS.Controls.StandardButton
+    Private chrome As ChromeController
+    Private Shared ReadOnly rndSlide As New Random()
 
     Private Sub frmPic_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
         'sets initial picture box status to empty & prevents icon from displaying in pic box
         picturebox1.InitialImage = Nothing
         Me.Text = "LCARS Media"
         EnsureMediaStages()
+        EnsureChromeController()
+        ApplySlideshowTimerFromSettings()
+        ApplyContentVisibility(MediaKind.None)
         ApplyRightRailLayout()
 
         Dim file As String() = Environment.GetCommandLineArgs()
@@ -69,6 +75,27 @@ Public Class frmPic
         fbPlayPause.Visible = False
         AddHandler fbPlayPause.Click, AddressOf PlayPause_Click
         Controls.Add(fbPlayPause)
+
+        fbSlideSettings = New LCARS.Controls.StandardButton()
+        fbSlideSettings.ButtonText = "SLIDE SET"
+        fbSlideSettings.Text = "SLIDE SET"
+        fbSlideSettings.Color = LCARS.LCARScolorStyles.SystemFunction
+        fbSlideSettings.Size = New Size(130, 28)
+        fbSlideSettings.Visible = False
+        AddHandler fbSlideSettings.Click, AddressOf SlideSettings_Click
+        Controls.Add(fbSlideSettings)
+    End Sub
+
+    Private Sub EnsureChromeController()
+        If chrome IsNot Nothing Then Return
+        chrome = New ChromeController(
+            Me,
+            New Control() {sbShow, fbSlideSettings, fbZoomOut, fbActual, fbZoomIn, pbZoom},
+            New Control() {fbPlayPause},
+            New Control() {fbPlayPause},
+            New Control() {Elbow1, Elbow2, Elbow3, Elbow4},
+            AddressOf ApplyRightRailLayout,
+            AddressOf ApplyContentVisibility)
     End Sub
 
     Public Sub LoadMedia(ByVal path As String)
@@ -76,7 +103,7 @@ Public Class frmPic
         Dim kind As MediaKind = MediaKindUtil.DetectMediaKind(path)
         If kind = MediaKind.None Then
             If Directory.Exists(path) Then
-                ' Folder browse path handled by sbBrowse for photos; try first media file.
+                LoadPhotoFolder(path, Nothing)
                 Return
             End If
             MsgBox("Unsupported media type:" & vbCrLf & path, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
@@ -86,16 +113,10 @@ Public Class frmPic
         StopCurrentPlayback()
         currentKind = kind
         currentPath = path
-        ApplyContentVisibility(kind)
 
         Select Case kind
             Case MediaKind.Photo
-                myFiles.Clear()
-                myFiles.Add(path)
-                index = 1
-                loadImages(index)
-                origpicboxwidth = picturebox1.Width
-                origpicboxheight = picturebox1.Height
+                LoadPhotoFolder(System.IO.Path.GetDirectoryName(path), path)
             Case MediaKind.Music, MediaKind.Video
                 Try
                     If vlcHost Is Nothing Then vlcHost = New VlcPlaybackHost()
@@ -111,19 +132,64 @@ Public Class frmPic
                     MsgBox("Playback failed:" & vbCrLf & ex.Message, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
                 End Try
         End Select
-        ApplyRightRailLayout()
+        EnsureChromeController()
+        chrome.TransitionTo(kind)
+    End Sub
+
+    ''' <summary>Load all images in a folder; optionally select a starting file.</summary>
+    Private Sub LoadPhotoFolder(ByVal folder As String, ByVal preferredFile As String)
+        myFiles.Clear()
+        If String.IsNullOrEmpty(folder) OrElse Not Directory.Exists(folder) Then
+            If Not String.IsNullOrEmpty(preferredFile) AndAlso File.Exists(preferredFile) Then
+                myFiles.Add(preferredFile)
+            End If
+        Else
+            Dim exts As String() = {".jpg", ".jpeg", ".gif", ".bmp", ".png", ".tif", ".tiff", ".webp"}
+            For Each f As String In Directory.GetFiles(folder)
+                Dim ext As String = System.IO.Path.GetExtension(f).ToLowerInvariant()
+                If Array.IndexOf(exts, ext) >= 0 Then myFiles.Add(f)
+            Next
+        End If
+        If myFiles.Count = 0 Then Return
+        currentKind = MediaKind.Photo
+        index = 1
+        If Not String.IsNullOrEmpty(preferredFile) Then
+            For i As Integer = 1 To myFiles.Count
+                If String.Equals(CStr(myFiles(i)), preferredFile, StringComparison.OrdinalIgnoreCase) Then
+                    index = i
+                    Exit For
+                End If
+            Next
+        End If
+        currentPath = CStr(myFiles(index))
+        loadImages(index)
+        origpicboxwidth = picturebox1.Width
+        origpicboxheight = picturebox1.Height
+        EnsureChromeController()
+        chrome.TransitionTo(MediaKind.Photo)
     End Sub
 
     Private Sub ApplyContentVisibility(ByVal kind As MediaKind)
         picturebox1.Visible = (kind = MediaKind.Photo OrElse kind = MediaKind.None)
         If pnlVideo IsNot Nothing Then pnlVideo.Visible = (kind = MediaKind.Video)
         If pnlMusic IsNot Nothing Then pnlMusic.Visible = (kind = MediaKind.Music)
-        If fbPlayPause IsNot Nothing Then fbPlayPause.Visible = (kind = MediaKind.Music OrElse kind = MediaKind.Video)
-        sbShow.Visible = (kind = MediaKind.Photo OrElse kind = MediaKind.None)
-        fbZoomIn.Visible = (kind = MediaKind.Photo OrElse kind = MediaKind.None)
-        fbZoomOut.Visible = (kind = MediaKind.Photo OrElse kind = MediaKind.None)
-        fbActual.Visible = (kind = MediaKind.Photo OrElse kind = MediaKind.None)
-        pbZoom.Visible = (kind = MediaKind.Photo OrElse kind = MediaKind.None)
+        Dim isPhoto As Boolean = (kind = MediaKind.Photo)
+        Dim isAv As Boolean = (kind = MediaKind.Music OrElse kind = MediaKind.Video)
+        If fbPlayPause IsNot Nothing Then fbPlayPause.Visible = isAv
+        sbShow.Visible = isPhoto
+        If fbSlideSettings IsNot Nothing Then fbSlideSettings.Visible = isPhoto
+        fbZoomIn.Visible = isPhoto
+        fbZoomOut.Visible = isPhoto
+        fbActual.Visible = isPhoto
+        pbZoom.Visible = isPhoto
+        ' Idle: BROWSE + CLOSE only (always visible).
+        Dim showNav As Boolean = isPhoto
+        panel1.Visible = showNav
+        Panel2.Visible = showNav
+    End Sub
+
+    Private Sub ApplySlideshowTimerFromSettings()
+        tmrShow.Interval = SlideshowSettingsStore.IntervalSeconds * 1000
     End Sub
 
     Private Sub StopCurrentPlayback()
@@ -148,7 +214,7 @@ Public Class frmPic
     End Sub
 
     ''' <summary>
-    ''' Right-justified vertical stack: BROWSE, slideshow, zoom, NAV (diameter = BROWSE width), CLOSE.
+    ''' Right-justified vertical stack (bottom→up): CLOSE, NAV, zoom, slide set, slideshow, BROWSE, play/pause.
     ''' </summary>
     Private Sub ApplyRightRailLayout()
         If sbBrowse Is Nothing OrElse sbExit Is Nothing Then Return
@@ -170,61 +236,72 @@ Public Class frmPic
 
         Dim y As Integer = sbExit.Top - gap
 
-        ' --- NAV cross: outer diameter = railW ---
-        Dim navSize As Integer = railW
-        Dim arm As Integer = Math.Max(22, CInt(Math.Round(navSize * 0.24)))
-        Dim navTop As Integer = y - navSize
-        Dim navLeft As Integer = railLeft
+        ' --- NAV cross: outer diameter = railW (photo pan) ---
+        If panel1.Visible OrElse Panel2.Visible Then
+            Dim navSize As Integer = railW
+            Dim arm As Integer = Math.Max(22, CInt(Math.Round(navSize * 0.24)))
+            Dim navTop As Integer = y - navSize
+            Dim navLeft As Integer = railLeft
 
-        ' Horizontal arm (Panel2)
-        Panel2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        Panel2.Size = New Size(navSize, arm)
-        Panel2.Location = New Point(navLeft, navTop + (navSize - arm) \ 2)
-        LayoutNavHorizontalArm(Panel2, arm)
+            Panel2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            Panel2.Size = New Size(navSize, arm)
+            Panel2.Location = New Point(navLeft, navTop + (navSize - arm) \ 2)
+            LayoutNavHorizontalArm(Panel2, arm)
 
-        ' Vertical arm (panel1)
-        panel1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        panel1.Size = New Size(arm, navSize)
-        panel1.Location = New Point(navLeft + (navSize - arm) \ 2, navTop)
-        LayoutNavVerticalArm(panel1, arm)
+            panel1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            panel1.Size = New Size(arm, navSize)
+            panel1.Location = New Point(navLeft + (navSize - arm) \ 2, navTop)
+            LayoutNavVerticalArm(panel1, arm)
 
-        panel1.BringToFront()
-        Panel2.BringToFront()
-        y = navTop - gap
+            panel1.BringToFront()
+            Panel2.BringToFront()
+            y = navTop - gap
+        End If
 
-        ' --- Zoom pie + −/FULL/+ row ---
-        Dim zoomH As Integer = Math.Max(28, CInt(Math.Round(railW * 0.28)))
-        Dim zoomBtnW As Integer = (railW - 4) \ 3
-        fbZoomOut.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        fbActual.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        fbZoomIn.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        pbZoom.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        ' --- Zoom pie + −/FULL/+ row (photo only) ---
+        If fbZoomOut.Visible OrElse pbZoom.Visible Then
+            Dim zoomH As Integer = Math.Max(28, CInt(Math.Round(railW * 0.28)))
+            Dim zoomBtnW As Integer = (railW - 4) \ 3
+            fbZoomOut.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            fbActual.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            fbZoomIn.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            pbZoom.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
 
-        fbZoomOut.Size = New Size(zoomBtnW, zoomH)
-        fbActual.Size = New Size(zoomBtnW, zoomH)
-        fbZoomIn.Size = New Size(railW - zoomBtnW * 2, zoomH)
-        fbZoomOut.Location = New Point(railLeft, y - zoomH)
-        fbActual.Location = New Point(fbZoomOut.Right + 2, fbZoomOut.Top)
-        fbZoomIn.Location = New Point(fbActual.Right + 2, fbZoomOut.Top)
+            fbZoomOut.Size = New Size(zoomBtnW, zoomH)
+            fbActual.Size = New Size(zoomBtnW, zoomH)
+            fbZoomIn.Size = New Size(railW - zoomBtnW * 2, zoomH)
+            fbZoomOut.Location = New Point(railLeft, y - zoomH)
+            fbActual.Location = New Point(fbZoomOut.Right + 2, fbZoomOut.Top)
+            fbZoomIn.Location = New Point(fbActual.Right + 2, fbZoomOut.Top)
 
-        Dim pieH As Integer = Math.Max(36, CInt(Math.Round(railW * 0.42)))
-        pbZoom.Size = New Size(railW, pieH)
-        pbZoom.Location = New Point(railLeft, fbZoomOut.Top - 2 - pieH)
-        ' Cutout circle diameter ≈ rail width (was CircleRadius 110 → ~220px ring).
-        pbZoom.CircleRadius = railW \ 2
-        pbZoom.CircleLocation = New Point(railW \ 2, pieH + railW \ 4)
-        y = pbZoom.Top - gap
+            Dim pieH As Integer = Math.Max(36, CInt(Math.Round(railW * 0.42)))
+            pbZoom.Size = New Size(railW, pieH)
+            pbZoom.Location = New Point(railLeft, fbZoomOut.Top - 2 - pieH)
+            pbZoom.CircleRadius = railW \ 2
+            pbZoom.CircleLocation = New Point(railW \ 2, pieH + railW \ 4)
+            y = pbZoom.Top - gap
+        End If
 
-        ' --- BROWSE / SLIDESHOW ---
+        ' --- BROWSE / SLIDESHOW / SLIDE SET / PLAY ---
         sbShow.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         sbBrowse.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         sbShow.Size = New Size(railW, sbShow.Height)
         sbBrowse.Size = New Size(railW, sbBrowse.Height)
-        sbShow.Location = New Point(railLeft, y - sbShow.Height)
-        sbBrowse.Location = New Point(railLeft, sbShow.Top - gap - sbBrowse.Height)
+        If fbSlideSettings IsNot Nothing AndAlso fbSlideSettings.Visible Then
+            fbSlideSettings.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            fbSlideSettings.Size = New Size(railW, 28)
+            fbSlideSettings.Location = New Point(railLeft, y - fbSlideSettings.Height)
+            y = fbSlideSettings.Top - gap
+        End If
+        If sbShow.Visible Then
+            sbShow.Location = New Point(railLeft, y - sbShow.Height)
+            y = sbShow.Top - gap
+        End If
+        sbBrowse.Location = New Point(railLeft, y - sbBrowse.Height)
 
         sbBrowse.BringToFront()
         sbShow.BringToFront()
+        If fbSlideSettings IsNot Nothing AndAlso fbSlideSettings.Visible Then fbSlideSettings.BringToFront()
         If fbPlayPause IsNot Nothing AndAlso fbPlayPause.Visible Then
             fbPlayPause.Size = New Size(railW, 35)
             fbPlayPause.Location = New Point(railLeft, sbBrowse.Top - gap - fbPlayPause.Height)
@@ -332,27 +409,56 @@ Public Class frmPic
 
 
     Private Sub tmrShow_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles tmrShow.Tick
-        abNext_Click(sender, e)
+        AdvanceSlideshow()
+    End Sub
 
-
-
+    Private Sub AdvanceSlideshow()
+        If myFiles.Count = 0 Then
+            tmrShow.Enabled = False
+            Return
+        End If
+        If SlideshowSettingsStore.ShuffleEnabled AndAlso myFiles.Count > 1 Then
+            Dim nextIdx As Integer = index
+            Do
+                nextIdx = rndSlide.Next(1, myFiles.Count + 1)
+            Loop While nextIdx = index AndAlso myFiles.Count > 1
+            index = nextIdx
+            loadImages(index)
+            Return
+        End If
+        If index + 1 > myFiles.Count Then
+            If SlideshowSettingsStore.LoopEnabled Then
+                index = 1
+                loadImages(index)
+            Else
+                tmrShow.Enabled = False
+                sbShow.ButtonText = "Start Slideshow"
+                sbShow.Text = "Start Slideshow"
+            End If
+        Else
+            index += 1
+            loadImages(index)
+        End If
     End Sub
 
     Private Sub sbShow_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbShow.Click
-
-
-
+        ApplySlideshowTimerFromSettings()
         tmrShow.Enabled = Not tmrShow.Enabled
-
-        If tmrShow.Enabled = True Then
+        If tmrShow.Enabled Then
             sbShow.ButtonText = "Stop Slideshow"
-
+            sbShow.Text = "Stop Slideshow"
         Else
             sbShow.ButtonText = "Start Slideshow"
-
-
-
+            sbShow.Text = "Start Slideshow"
         End If
+    End Sub
+
+    Private Sub SlideSettings_Click(ByVal sender As Object, ByVal e As EventArgs)
+        Using dlg As New frmSlideshowSettings()
+            If dlg.ShowDialog(Me) = DialogResult.OK Then
+                ApplySlideshowTimerFromSettings()
+            End If
+        End Using
     End Sub
 
     Private Sub sbBrowse_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbBrowse.Click
@@ -455,6 +561,10 @@ Public Class frmPic
 
     Private Sub sbExit_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbExit.Click
         StopCurrentPlayback()
+        If chrome IsNot Nothing Then
+            chrome.DisposeTimer()
+            chrome = Nothing
+        End If
         If vlcHost IsNot Nothing Then
             vlcHost.Dispose()
             vlcHost = Nothing

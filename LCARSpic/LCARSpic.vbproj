@@ -86,8 +86,10 @@
     <Import Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Media\ChromeController.vb" />
     <Compile Include="Media\MediaKind.vb" />
     <Compile Include="Media\MediaSessionIpc.vb" />
+    <Compile Include="Media\SlideshowSettings.vb" />
     <Compile Include="Media\VlcPlaybackHost.vb" />
     <Compile Include="frmPic.designer.vb">
       <DependentUpon>frmPic.vb</DependentUpon>

@@ -61,6 +61,11 @@ Public Class frmStartup
             myData = System.Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, GetType(COPYDATASTRUCT))
 
             'Find out what kind of data was sent:
+            ' LCARSmedia Phase 1 strip hook (dwData = LMED magic) — no UI yet.
+            If modMediaSession.TryHandleCopyData(New IntPtr(myData.dwData), myData.cdData, myData.lpData) Then
+                m.Result = 1
+                Return
+            End If
             Select Case myData.dwData
                 Case 1
                     'They want to set the wallpaper

@@ -38,11 +38,11 @@
 
 **Files:** `frmPic.designer.vb`, `frmPic.vb`
 
-- [ ] Measure `sbBrowse.Width`; set NAV cluster (`panel1`/`Panel2` D-pad) diameter/size to that width; scale children proportionally.
-- [ ] Stack vertically, right-aligned: BROWSE → slideshow → zoom row → NAV → CLOSE (`sbExit`).
-- [ ] Override `OnShellChromeLayout` to place CLOSE under NAV (not overlapping); remove reliance on misaligned X layout.
-- [ ] Build `LCARSpic`; run and confirm rail matches screenshot intent.
-- [ ] Commit: `Fix LCARSmedia (LCARSpic) right rail: shrink NAV, stack controls, CLOSE under.`
+- [x] Measure `sbBrowse.Width`; set NAV cluster (`panel1`/`Panel2` D-pad) diameter/size to that width; scale children proportionally.
+- [x] Stack vertically, right-aligned: BROWSE → slideshow → zoom row → NAV → CLOSE (`sbExit`).
+- [x] Override `OnShellChromeLayout` to place CLOSE under NAV (not overlapping); remove reliance on misaligned X layout.
+- [x] Build `LCARSpic`; run and confirm rail matches screenshot intent.
+- [x] Commit: `Fix LCARSmedia (LCARSpic) right rail: shrink NAV, stack controls, CLOSE under.`
 
 ---
 
@@ -50,11 +50,11 @@
 
 **Files:** `LCARSpic.vbproj` (`AssemblyName`/`RootNamespace` carefully), `AssemblyInfo`, `modBusiness.vb`, Build/Package scripts, `Installing.vb`, solution entries as needed.
 
-- [ ] Set output exe to `LCARSmedia.exe` (keep project folder `LCARSpic` for less churn, or rename folder if clean).
-- [ ] `myPhoto_Click` → `LCARSmedia.exe`.
-- [ ] Package/Build copy `LCARSmedia.exe`; keep `LCARSpic.exe` copy as optional alias **or** replace — prefer replace + one release note.
-- [ ] Build + smoke launch from main.
-- [ ] Commit: `Rename Photo Viewer output to LCARSmedia.exe and update launch/package paths.`
+- [x] Set output exe to `LCARSmedia.exe` (keep project folder `LCARSpic` for less churn, or rename folder if clean).
+- [x] `myPhoto_Click` → `LCARSmedia.exe`.
+- [x] Package/Build copy `LCARSmedia.exe`; keep `LCARSpic.exe` copy as optional alias **or** replace — prefer replace + one release note.
+- [x] Build + smoke launch from main.
+- [x] Commit: `Rename Photo Viewer output to LCARSmedia.exe and update launch/package paths.`
 
 ---
 
@@ -62,11 +62,11 @@
 
 **Files:** new `Media\MediaKind.vb`; `frmPic.vb`
 
-- [ ] `DetectMediaKind(path) As MediaKind` by extension (images / audio / video lists).
-- [ ] Add `Panel` for VLC video; keep `picturebox1` for photos; add simple music panel (labels).
-- [ ] `LoadMedia(path)` switches visible stage; stops prior VLC if any.
-- [ ] BROWSE uses LCARS dialog; on OK call `LoadMedia`.
-- [ ] Commit: `Add media kind detection and photo/audio/video stage hosts.`
+- [x] `DetectMediaKind(path) As MediaKind` by extension (images / audio / video lists).
+- [x] Add `Panel` for VLC video; keep `picturebox1` for photos; add simple music panel (labels).
+- [x] `LoadMedia(path)` switches visible stage; stops prior VLC if any.
+- [x] BROWSE uses LCARS dialog; on OK call `LoadMedia`.
+- [x] Commit: `Add media kind detection and photo/audio/video stage hosts.`
 
 ---
 
@@ -74,12 +74,12 @@
 
 **Files:** `VlcPlaybackHost.vb`, vbproj refs, `lib\vlc\` or NuGet restore into output, package scripts.
 
-- [ ] Add LibVLCSharp + VideoLAN.LibVLC.Windows (x86) or vendored natives under `LCARSpic\lib\vlc\`.
-- [ ] `VlcPlaybackHost`: Play/Pause/Stop/Seek, attach to panel HWND, dispose cleanly.
-- [ ] Wire Music/Video `LoadMedia` through host; photo stays GDI+.
-- [ ] Package copies `libvlc.dll`, `libvlccore.dll`, `plugins\**` next to exe (or documented relative path).
-- [ ] Manual test: mp3 + mp4 on this PC.
-- [ ] Commit: `Integrate LibVLC for local audio and video playback.`
+- [x] Add LibVLCSharp + VideoLAN.LibVLC.Windows (x86) or vendored natives under `LCARSpic\lib\vlc\`.
+- [x] `VlcPlaybackHost`: Play/Pause/Stop/Seek, attach to panel HWND, dispose cleanly.
+- [x] Wire Music/Video `LoadMedia` through host; photo stays GDI+.
+- [x] Package copies `libvlc.dll`, `libvlccore.dll`, `plugins\**` next to exe (or documented relative path).
+- [x] Manual test: mp3 + mp4 on this PC.
+- [x] Commit: `Integrate LibVLC for local audio and video playback.`
 
 ---
 
@@ -87,10 +87,10 @@
 
 **Files:** `ChromeController.vb`, `frmPic.vb`
 
-- [ ] Define control sets: PhotoControls, MusicControls, VideoControls.
-- [ ] On kind change: animate old set out (Left/Opacity or Top slide ~250ms), morph elbow bounds toward target, animate new set in.
-- [ ] Idle: BROWSE + CLOSE only (or BROWSE accepting all types).
-- [ ] Commit: `Animate chrome transitions when media type changes.`
+- [x] Define control sets: PhotoControls, MusicControls, VideoControls.
+- [x] On kind change: animate old set out (Left/Opacity or Top slide ~250ms), morph elbow bounds toward target, animate new set in.
+- [x] Idle: BROWSE + CLOSE only (or BROWSE accepting all types).
+- [x] Commit: `Animate chrome transitions when media type changes.`
 
 ---
 
@@ -98,9 +98,9 @@
 
 **Files:** `frmPic.vb`, small settings dialog or inline LCARS panel
 
-- [ ] Settings: interval (seconds), loop, shuffle.
-- [ ] Persist via `GetSetting`/`SaveSetting` under `LCARS x32` / `LCARSmedia`.
-- [ ] Commit: `Add slideshow settings for photo mode.`
+- [x] Settings: interval (seconds), loop, shuffle.
+- [x] Persist via `GetSetting`/`SaveSetting` under `LCARS x32` / `LCARSmedia`.
+- [x] Commit: `Add slideshow settings for photo mode.`
 
 ---
 
@@ -108,19 +108,19 @@
 
 **Files:** `MediaSessionIpc.vb` in media app; stub receiver module in `LCARSmain` (can no-op UI)
 
-- [ ] Broadcast state: kind, title, playing, position (WM_COPYDATA or named event+file — pick simplest matching OSK patterns).
-- [ ] Accept commands: PlayPause, Stop, ShowWindow.
-- [ ] Document message IDs in code comments for strip slice.
-- [ ] Commit: `Add MediaSession IPC hook for future shell media strip.`
+- [x] Broadcast state: kind, title, playing, position (WM_COPYDATA or named event+file — pick simplest matching OSK patterns).
+- [x] Accept commands: PlayPause, Stop, ShowWindow.
+- [x] Document message IDs in code comments for strip slice.
+- [x] Commit: `Add MediaSession IPC hook for future shell media strip.`
 
 ---
 
 ### Task 8: Build, package, upload
 
-- [ ] Full `Build-LCARS.ps1 -Configuration Debug`
-- [ ] `Package-LCARSUpdate.ps1 -Bump` including LibVLC files
-- [ ] `Upload-LCARSUpdate.ps1`
-- [ ] Verify CustomVersion lists `LCARSmedia.exe` (+ vlc deps if separate lines)
+- [x] Full `Build-LCARS.ps1 -Configuration Debug`
+- [x] `Package-LCARSUpdate.ps1 -Bump` including LibVLC files
+- [x] `Upload-LCARSUpdate.ps1`
+- [x] Verify CustomVersion lists `LCARSmedia.exe` (+ vlc deps if separate lines)
 
 ---
 
