@@ -217,10 +217,11 @@ Public Class frmPic
         fbZoomOut.Visible = isPhoto
         fbActual.Visible = isPhoto
         pbZoom.Visible = isPhoto
-        Dim showNav As Boolean = isPhoto
-        panel1.Visible = showNav
-        Panel2.Visible = showNav
+        ' NAV "+" is chrome — always visible (pan active for photos; decorative/ready for A/V).
+        panel1.Visible = True
+        Panel2.Visible = True
         If StandardButton1 IsNot Nothing Then StandardButton1.Visible = True
+        If lblInfo IsNot Nothing Then lblInfo.Visible = isPhoto
     End Sub
 
     Private Sub ApplySlideshowTimerFromSettings()
@@ -370,7 +371,8 @@ Public Class frmPic
     End Sub
 
     ''' <summary>
-    ''' Right-justified stack: CLOSE, decorative disc (= BROWSE width), NAV/zoom/transport, BROWSE.
+    ''' Right rail (bottom→up): CLOSE, BROWSE (+ photo slide), NAV disc+cross, zoom/transport.
+    ''' Right LCARS frame sits just left of the rail; Panel3 expands to that frame.
     ''' </summary>
     Private Sub ApplyRightRailLayout()
         If sbBrowse Is Nothing OrElse sbExit Is Nothing Then Return
@@ -378,52 +380,69 @@ Public Class frmPic
 
         Const margin As Integer = 8
         Const gap As Integer = 6
+        Const frameBarW As Integer = 50
         Dim railW As Integer = Math.Max(100, sbBrowse.Width)
         Dim right As Integer = ClientSize.Width - margin
         Dim railLeft As Integer = right - railW
 
-        ' --- CLOSE at bottom of stack ---
+        ' --- CLOSE at bottom ---
         sbExit.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         sbExit.Size = New Size(railW, 28)
         sbExit.Location = New Point(railLeft, ClientSize.Height - margin - sbExit.Height)
         sbExit.ButtonText = "CLOSE"
         sbExit.Text = "CLOSE"
-        sbExit.BringToFront()
 
         Dim y As Integer = sbExit.Top - gap
 
-        ' --- Decorative disc: diameter = BROWSE width (was oversized 200px) ---
+        ' --- BROWSE / slideshow / slide set (directly above CLOSE) ---
+        sbShow.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        sbBrowse.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        sbShow.Size = New Size(railW, Math.Max(28, sbShow.Height))
+        sbBrowse.Size = New Size(railW, Math.Max(28, sbBrowse.Height))
+        If fbSlideSettings IsNot Nothing AndAlso fbSlideSettings.Visible Then
+            fbSlideSettings.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            fbSlideSettings.Size = New Size(railW, 28)
+            fbSlideSettings.Location = New Point(railLeft, y - fbSlideSettings.Height)
+            y = fbSlideSettings.Top - gap
+        End If
+        If sbShow.Visible Then
+            sbShow.Location = New Point(railLeft, y - sbShow.Height)
+            y = sbShow.Top - gap
+        End If
+        sbBrowse.Location = New Point(railLeft, y - sbBrowse.Height)
+        y = sbBrowse.Top - gap
+
+        ' --- NAV disc + full "+" cross (diameter = BROWSE width), directly above BROWSE ---
+        Dim navSize As Integer = railW
+        Dim arm As Integer = Math.Max(22, CInt(Math.Round(navSize * 0.24)))
+        Dim navTop As Integer = y - navSize
+        Dim navLeft As Integer = railLeft
+
         If StandardButton1 IsNot Nothing Then
             StandardButton1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-            StandardButton1.Size = New Size(railW, railW)
-            ' Sit left of the rail so buttons overlap its right edge (original chrome feel).
-            StandardButton1.Location = New Point(railLeft - CInt(railW * 0.4), sbExit.Bottom - railW)
+            StandardButton1.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
+            StandardButton1.Size = New Size(navSize, navSize)
+            StandardButton1.Location = New Point(navLeft, navTop)
             StandardButton1.SendToBack()
         End If
 
-        ' --- NAV cross: outer diameter = railW (photo pan) ---
-        If panel1.Visible OrElse Panel2.Visible Then
-            Dim navSize As Integer = railW
-            Dim arm As Integer = Math.Max(22, CInt(Math.Round(navSize * 0.24)))
-            Dim navTop As Integer = y - navSize
-            Dim navLeft As Integer = railLeft
+        panel1.Visible = True
+        Panel2.Visible = True
+        Panel2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        Panel2.Size = New Size(navSize, arm)
+        Panel2.Location = New Point(navLeft, navTop + (navSize - arm) \ 2)
+        LayoutNavHorizontalArm(Panel2, arm)
 
-            Panel2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-            Panel2.Size = New Size(navSize, arm)
-            Panel2.Location = New Point(navLeft, navTop + (navSize - arm) \ 2)
-            LayoutNavHorizontalArm(Panel2, arm)
+        panel1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        panel1.Size = New Size(arm, navSize)
+        panel1.Location = New Point(navLeft + (navSize - arm) \ 2, navTop)
+        LayoutNavVerticalArm(panel1, arm)
 
-            panel1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-            panel1.Size = New Size(arm, navSize)
-            panel1.Location = New Point(navLeft + (navSize - arm) \ 2, navTop)
-            LayoutNavVerticalArm(panel1, arm)
+        panel1.BringToFront()
+        Panel2.BringToFront()
+        y = navTop - gap
 
-            panel1.BringToFront()
-            Panel2.BringToFront()
-            y = navTop - gap
-        End If
-
-        ' --- Zoom pie + −/FULL/+ row (photo only) ---
+        ' --- Zoom pie + −/FULL/+ (photo) ---
         If fbZoomOut.Visible OrElse pbZoom.Visible Then
             Dim zoomH As Integer = Math.Max(28, CInt(Math.Round(railW * 0.28)))
             Dim zoomBtnW As Integer = (railW - 4) \ 3
@@ -447,34 +466,70 @@ Public Class frmPic
             y = pbZoom.Top - gap
         End If
 
-        ' --- A/V transport cluster ---
+        ' --- A/V transport ---
         If transport IsNot Nothing AndAlso transport.PlayPause.Visible Then
             y = transport.LayoutAbove(railLeft, railW, y, gap)
-            Dim stageLeft As Integer = Panel3.Left
-            Dim stageW As Integer = Panel3.Width
-            transport.LayoutSeek(stageLeft, stageW, ClientSize.Height - margin)
         End If
 
-        ' --- BROWSE / SLIDESHOW / SLIDE SET ---
-        sbShow.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        sbBrowse.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        sbShow.Size = New Size(railW, sbShow.Height)
-        sbBrowse.Size = New Size(railW, sbBrowse.Height)
-        If fbSlideSettings IsNot Nothing AndAlso fbSlideSettings.Visible Then
-            fbSlideSettings.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-            fbSlideSettings.Size = New Size(railW, 28)
-            fbSlideSettings.Location = New Point(railLeft, y - fbSlideSettings.Height)
-            y = fbSlideSettings.Top - gap
+        ' --- Right LCARS frame immediately left of rail; expand media stage into the gap ---
+        Dim elbowW As Integer = 72
+        Dim frameLeft As Integer = railLeft - gap - frameBarW
+        Dim elbowLeft As Integer = frameLeft - (elbowW - frameBarW)
+        Dim titleBottom As Integer = If(tbTitle IsNot Nothing, tbTitle.Bottom + 4, 48)
+        Dim bottomChrome As Integer = ClientSize.Height - margin
+
+        If Elbow4 IsNot Nothing Then
+            Elbow4.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+            Elbow4.Size = New Size(elbowW, 68)
+            Elbow4.Location = New Point(elbowLeft, titleBottom)
+            Elbow4.ButtonWidth = frameBarW
         End If
-        If sbShow.Visible Then
-            sbShow.Location = New Point(railLeft, y - sbShow.Height)
-            y = sbShow.Top - gap
+        If Elbow3 IsNot Nothing Then
+            Elbow3.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            Elbow3.Size = New Size(elbowW, 68)
+            Elbow3.Location = New Point(elbowLeft, bottomChrome - Elbow3.Height)
+            Elbow3.ButtonWidth = frameBarW
         End If
-        sbBrowse.Location = New Point(railLeft, y - sbBrowse.Height)
+        If fbInfo1 IsNot Nothing Then
+            fbInfo1.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+            fbInfo1.Size = New Size(frameBarW, 57)
+            fbInfo1.Location = New Point(frameLeft, Elbow4.Bottom + 4)
+        End If
+        If FlatButton6 IsNot Nothing Then
+            FlatButton6.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Right
+            Dim barTop As Integer = fbInfo1.Bottom + 4
+            Dim barBottom As Integer = Elbow3.Top - 4
+            FlatButton6.Location = New Point(frameLeft, barTop)
+            FlatButton6.Size = New Size(frameBarW, Math.Max(40, barBottom - barTop))
+        End If
+
+        ' Panel3: fill between left chrome and right frame (was leaving a huge empty right gutter).
+        Dim stageLeft As Integer = 90
+        If FlatButton4 IsNot Nothing Then stageLeft = FlatButton4.Right + 8
+        Dim stageRight As Integer = elbowLeft - gap
+        Dim stageTop As Integer = titleBottom + 8
+        Dim stageBottom As Integer = bottomChrome - 8
+        If Panel3 IsNot Nothing AndAlso stageRight > stageLeft + 100 Then
+            Panel3.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left
+            Panel3.Location = New Point(stageLeft, stageTop)
+            Panel3.Size = New Size(stageRight - stageLeft, Math.Max(100, stageBottom - stageTop))
+        End If
+
+        If lblInfo IsNot Nothing AndAlso lblInfo.Visible Then
+            lblInfo.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+            lblInfo.Location = New Point(railLeft, titleBottom)
+            lblInfo.Size = New Size(railW, Math.Max(40, Math.Min(120, y - titleBottom - gap)))
+        End If
+
+        If transport IsNot Nothing AndAlso transport.SeekBar.Visible AndAlso Panel3 IsNot Nothing Then
+            transport.LayoutSeek(Panel3.Left, Panel3.Width, ClientSize.Height - margin)
+        End If
 
         sbBrowse.BringToFront()
         sbShow.BringToFront()
         If fbSlideSettings IsNot Nothing AndAlso fbSlideSettings.Visible Then fbSlideSettings.BringToFront()
+        panel1.BringToFront()
+        Panel2.BringToFront()
         fbZoomOut.BringToFront()
         fbActual.BringToFront()
         fbZoomIn.BringToFront()
