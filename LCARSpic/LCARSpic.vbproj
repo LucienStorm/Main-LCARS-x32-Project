@@ -72,6 +72,8 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
   </ItemGroup>
@@ -89,6 +91,7 @@
     <Compile Include="Media\ChromeController.vb" />
     <Compile Include="Media\MediaKind.vb" />
     <Compile Include="Media\MediaSessionIpc.vb" />
+    <Compile Include="Media\MediaTransportControls.vb" />
     <Compile Include="Media\SlideshowSettings.vb" />
     <Compile Include="Media\VlcPlaybackHost.vb" />
     <Compile Include="frmPic.designer.vb">

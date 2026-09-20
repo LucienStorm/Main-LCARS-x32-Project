@@ -1,6 +1,7 @@
 Option Strict On
 Option Explicit On
 
+Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.IO
 Imports System.Windows.Forms
@@ -26,6 +27,9 @@ Public Class frmPic
     Private fbPlayPause As LCARS.Controls.StandardButton
     Private fbSlideSettings As LCARS.Controls.StandardButton
     Private chrome As ChromeController
+    Private transport As MediaTransportControls
+    Private mediaLoop As Boolean = False
+    Private seekDragging As Boolean = False
     Private Shared ReadOnly rndSlide As New Random()
 
     Private Sub frmPic_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
@@ -67,14 +71,9 @@ Public Class frmPic
         pnlMusic.Controls.Add(lblNowPlaying)
         Panel3.Controls.Add(pnlMusic)
 
-        fbPlayPause = New LCARS.Controls.StandardButton()
-        fbPlayPause.ButtonText = "PLAY/PAUSE"
-        fbPlayPause.Text = "PLAY/PAUSE"
-        fbPlayPause.Color = LCARS.LCARScolorStyles.PrimaryFunction
-        fbPlayPause.Size = New Size(130, 35)
-        fbPlayPause.Visible = False
-        AddHandler fbPlayPause.Click, AddressOf PlayPause_Click
-        Controls.Add(fbPlayPause)
+        transport = New MediaTransportControls(Me)
+        fbPlayPause = transport.PlayPause
+        WireTransportHandlers()
 
         fbSlideSettings = New LCARS.Controls.StandardButton()
         fbSlideSettings.ButtonText = "SLIDE SET"
@@ -84,15 +83,46 @@ Public Class frmPic
         fbSlideSettings.Visible = False
         AddHandler fbSlideSettings.Click, AddressOf SlideSettings_Click
         Controls.Add(fbSlideSettings)
+
+        If StandardButton1 IsNot Nothing Then
+            StandardButton1.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
+            StandardButton1.Clickable = False
+        End If
+    End Sub
+
+    Private Sub WireTransportHandlers()
+        AddHandler transport.PlayPause.Click, AddressOf PlayPause_Click
+        AddHandler transport.StopBtn.Click, AddressOf TransportStop_Click
+        AddHandler transport.Rewind.Click, Sub() If vlcHost IsNot Nothing Then vlcHost.SeekRelativeMs(-10000)
+        AddHandler transport.Forward.Click, Sub() If vlcHost IsNot Nothing Then vlcHost.SeekRelativeMs(10000)
+        AddHandler transport.Mute.Click, AddressOf TransportMute_Click
+        AddHandler transport.VolDown.Click, Sub() If vlcHost IsNot Nothing Then vlcHost.AdjustVolume(-5)
+        AddHandler transport.VolUp.Click, Sub() If vlcHost IsNot Nothing Then vlcHost.AdjustVolume(5)
+        AddHandler transport.LoopBtn.Click, AddressOf TransportLoop_Click
+        AddHandler transport.Speed.Click, AddressOf TransportSpeed_Click
+        AddHandler transport.AudioTrack.Click, AddressOf TransportAudio_Click
+        AddHandler transport.Subtitles.Click, AddressOf TransportSubs_Click
+        AddHandler transport.Fullscreen.Click, AddressOf TransportFullscreen_Click
+        AddHandler transport.SeekBar.MouseDown, Sub() seekDragging = True
+        AddHandler transport.SeekBar.MouseUp, AddressOf SeekBar_MouseUp
+        AddHandler transport.SeekBar.Scroll, AddressOf SeekBar_Scroll
     End Sub
 
     Private Sub EnsureChromeController()
         If chrome IsNot Nothing Then Return
+        Dim avButtons As Control() = transport.Buttons.ToArray()
+        Dim photoSet As New List(Of Control)()
+        photoSet.Add(sbShow)
+        photoSet.Add(fbSlideSettings)
+        photoSet.Add(fbZoomOut)
+        photoSet.Add(fbActual)
+        photoSet.Add(fbZoomIn)
+        photoSet.Add(pbZoom)
         chrome = New ChromeController(
             Me,
-            New Control() {sbShow, fbSlideSettings, fbZoomOut, fbActual, fbZoomIn, pbZoom},
-            New Control() {fbPlayPause},
-            New Control() {fbPlayPause},
+            photoSet.ToArray(),
+            avButtons,
+            avButtons,
             New Control() {Elbow1, Elbow2, Elbow3, Elbow4},
             AddressOf ApplyRightRailLayout,
             AddressOf ApplyContentVisibility)
@@ -119,7 +149,11 @@ Public Class frmPic
                 LoadPhotoFolder(System.IO.Path.GetDirectoryName(path), path)
             Case MediaKind.Music, MediaKind.Video
                 Try
-                    If vlcHost Is Nothing Then vlcHost = New VlcPlaybackHost()
+                    If vlcHost Is Nothing Then
+                        vlcHost = New VlcPlaybackHost()
+                        AddHandler vlcHost.PlaybackEnded, AddressOf Vlc_PlaybackEnded
+                        AddHandler vlcHost.TimeChanged, AddressOf Vlc_TimeChanged
+                    End If
                     If kind = MediaKind.Video Then
                         vlcHost.AttachVideoSurface(pnlVideo.Handle)
                     Else
@@ -127,6 +161,7 @@ Public Class frmPic
                         lblNowPlaying.Text = System.IO.Path.GetFileName(path)
                     End If
                     vlcHost.PlayFile(path)
+                    RefreshTransportLabels()
                     MediaSessionIpc.BroadcastState(kind, System.IO.Path.GetFileName(path), True, 0)
                 Catch ex As Exception
                     MsgBox("Playback failed:" & vbCrLf & ex.Message, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
@@ -175,17 +210,17 @@ Public Class frmPic
         If pnlMusic IsNot Nothing Then pnlMusic.Visible = (kind = MediaKind.Music)
         Dim isPhoto As Boolean = (kind = MediaKind.Photo)
         Dim isAv As Boolean = (kind = MediaKind.Music OrElse kind = MediaKind.Video)
-        If fbPlayPause IsNot Nothing Then fbPlayPause.Visible = isAv
+        If transport IsNot Nothing Then transport.SetVisible(isAv, kind = MediaKind.Video)
         sbShow.Visible = isPhoto
         If fbSlideSettings IsNot Nothing Then fbSlideSettings.Visible = isPhoto
         fbZoomIn.Visible = isPhoto
         fbZoomOut.Visible = isPhoto
         fbActual.Visible = isPhoto
         pbZoom.Visible = isPhoto
-        ' Idle: BROWSE + CLOSE only (always visible).
         Dim showNav As Boolean = isPhoto
         panel1.Visible = showNav
         Panel2.Visible = showNav
+        If StandardButton1 IsNot Nothing Then StandardButton1.Visible = True
     End Sub
 
     Private Sub ApplySlideshowTimerFromSettings()
@@ -205,8 +240,129 @@ Public Class frmPic
     Private Sub PlayPause_Click(ByVal sender As Object, ByVal e As EventArgs)
         If vlcHost Is Nothing Then Return
         vlcHost.TogglePause()
-        MediaSessionIpc.BroadcastState(currentKind, System.IO.Path.GetFileName(currentPath), vlcHost.IsPlaying, vlcHost.PositionMs())
+        RefreshTransportLabels()
+        MediaSessionIpc.BroadcastState(currentKind, System.IO.Path.GetFileName(currentPath), vlcHost.IsPlaying, CInt(Math.Min(Integer.MaxValue, vlcHost.PositionMs())))
     End Sub
+
+    Private Sub TransportStop_Click(ByVal sender As Object, ByVal e As EventArgs)
+        If vlcHost Is Nothing Then Return
+        vlcHost.StopPlayback()
+        RefreshTransportLabels()
+        MediaSessionIpc.BroadcastState(currentKind, System.IO.Path.GetFileName(currentPath), False, 0)
+    End Sub
+
+    Private Sub TransportMute_Click(ByVal sender As Object, ByVal e As EventArgs)
+        If vlcHost Is Nothing Then Return
+        vlcHost.ToggleMute()
+        transport.Mute.ButtonText = If(vlcHost.Mute, "UNMUTE", "MUTE")
+        transport.Mute.Text = transport.Mute.ButtonText
+    End Sub
+
+    Private Sub TransportLoop_Click(ByVal sender As Object, ByVal e As EventArgs)
+        mediaLoop = Not mediaLoop
+        transport.LoopBtn.ButtonText = If(mediaLoop, "LOOP ON", "LOOP OFF")
+        transport.LoopBtn.Text = transport.LoopBtn.ButtonText
+    End Sub
+
+    Private Sub TransportSpeed_Click(ByVal sender As Object, ByVal e As EventArgs)
+        If vlcHost Is Nothing Then Return
+        Dim rate As Single = vlcHost.CycleRate()
+        transport.Speed.ButtonText = "SPEED " & rate.ToString("0.##") & "x"
+        transport.Speed.Text = transport.Speed.ButtonText
+    End Sub
+
+    Private Sub TransportAudio_Click(ByVal sender As Object, ByVal e As EventArgs)
+        If vlcHost Is Nothing Then Return
+        Dim name As String = vlcHost.CycleAudioTrack()
+        transport.AudioTrack.ButtonText = name
+        transport.AudioTrack.Text = name
+    End Sub
+
+    Private Sub TransportSubs_Click(ByVal sender As Object, ByVal e As EventArgs)
+        If vlcHost Is Nothing Then Return
+        Dim name As String = vlcHost.CycleSubtitle()
+        transport.Subtitles.ButtonText = name
+        transport.Subtitles.Text = name
+    End Sub
+
+    Private Sub TransportFullscreen_Click(ByVal sender As Object, ByVal e As EventArgs)
+        If Me.FormBorderStyle = FormBorderStyle.None AndAlso Me.WindowState = FormWindowState.Maximized Then
+            Me.FormBorderStyle = FormBorderStyle.Sizable
+            Me.WindowState = FormWindowState.Normal
+            transport.Fullscreen.ButtonText = "FULLSCREEN"
+        Else
+            Me.FormBorderStyle = FormBorderStyle.None
+            Me.WindowState = FormWindowState.Maximized
+            transport.Fullscreen.ButtonText = "WINDOWED"
+        End If
+        transport.Fullscreen.Text = transport.Fullscreen.ButtonText
+    End Sub
+
+    Private Sub SeekBar_MouseUp(ByVal sender As Object, ByVal e As MouseEventArgs)
+        seekDragging = False
+        SeekBar_Scroll(sender, e)
+    End Sub
+
+    Private Sub SeekBar_Scroll(ByVal sender As Object, ByVal e As EventArgs)
+        If vlcHost Is Nothing OrElse transport Is Nothing Then Return
+        Dim len As Long = vlcHost.LengthMs()
+        If len <= 0 Then Return
+        Dim ms As Long = CLng(Math.Round(len * (transport.SeekBar.Value / CDbl(transport.SeekBar.Maximum))))
+        vlcHost.SeekToMs(ms)
+        RefreshTransportLabels()
+    End Sub
+
+    Private Sub Vlc_PlaybackEnded(ByVal sender As Object, ByVal e As EventArgs)
+        If Me.IsDisposed Then Return
+        Me.BeginInvoke(New MethodInvoker(Sub()
+                                             If mediaLoop AndAlso Not String.IsNullOrEmpty(currentPath) Then
+                                                 Try
+                                                     vlcHost.PlayFile(currentPath)
+                                                 Catch
+                                                 End Try
+                                             Else
+                                                 RefreshTransportLabels()
+                                             End If
+                                         End Sub))
+    End Sub
+
+    Private Sub Vlc_TimeChanged(ByVal sender As Object, ByVal e As EventArgs)
+        If Me.IsDisposed OrElse seekDragging Then Return
+        Try
+            If Me.InvokeRequired Then
+                Me.BeginInvoke(New MethodInvoker(AddressOf RefreshTransportLabels))
+            Else
+                RefreshTransportLabels()
+            End If
+        Catch
+        End Try
+    End Sub
+
+    Private Sub RefreshTransportLabels()
+        If transport Is Nothing OrElse vlcHost Is Nothing Then Return
+        Dim pos As Long = vlcHost.PositionMs()
+        Dim len As Long = vlcHost.LengthMs()
+        transport.TimeLabel.Text = FormatMs(pos) & " / " & FormatMs(len)
+        If Not seekDragging AndAlso len > 0 Then
+            Dim v As Integer = CInt(Math.Max(0, Math.Min(transport.SeekBar.Maximum, Math.Round(transport.SeekBar.Maximum * (pos / CDbl(len))))))
+            transport.SeekBar.Value = v
+        End If
+        transport.PlayPause.ButtonText = If(vlcHost.IsPlaying, "PAUSE", "PLAY")
+        transport.PlayPause.Text = transport.PlayPause.ButtonText
+        transport.Mute.ButtonText = If(vlcHost.Mute, "UNMUTE", "MUTE")
+        transport.Mute.Text = transport.Mute.ButtonText
+    End Sub
+
+    Private Shared Function FormatMs(ByVal ms As Long) As String
+        If ms < 0 Then ms = 0
+        Dim totalSec As Integer = CInt(ms \ 1000L)
+        Dim m As Integer = totalSec \ 60
+        Dim s As Integer = totalSec Mod 60
+        Dim h As Integer = m \ 60
+        m = m Mod 60
+        If h > 0 Then Return h.ToString("00") & ":" & m.ToString("00") & ":" & s.ToString("00")
+        Return m.ToString("00") & ":" & s.ToString("00")
+    End Function
 
     Protected Overrides Sub OnShellChromeLayout()
         ' Media app uses its own right-rail stack (CLOSE under NAV), not shell Start-Menu CLOSE alignment.
@@ -214,7 +370,7 @@ Public Class frmPic
     End Sub
 
     ''' <summary>
-    ''' Right-justified vertical stack (bottom→up): CLOSE, NAV, zoom, slide set, slideshow, BROWSE, play/pause.
+    ''' Right-justified stack: CLOSE, decorative disc (= BROWSE width), NAV/zoom/transport, BROWSE.
     ''' </summary>
     Private Sub ApplyRightRailLayout()
         If sbBrowse Is Nothing OrElse sbExit Is Nothing Then Return
@@ -235,6 +391,15 @@ Public Class frmPic
         sbExit.BringToFront()
 
         Dim y As Integer = sbExit.Top - gap
+
+        ' --- Decorative disc: diameter = BROWSE width (was oversized 200px) ---
+        If StandardButton1 IsNot Nothing Then
+            StandardButton1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            StandardButton1.Size = New Size(railW, railW)
+            ' Sit left of the rail so buttons overlap its right edge (original chrome feel).
+            StandardButton1.Location = New Point(railLeft - CInt(railW * 0.4), sbExit.Bottom - railW)
+            StandardButton1.SendToBack()
+        End If
 
         ' --- NAV cross: outer diameter = railW (photo pan) ---
         If panel1.Visible OrElse Panel2.Visible Then
@@ -282,7 +447,15 @@ Public Class frmPic
             y = pbZoom.Top - gap
         End If
 
-        ' --- BROWSE / SLIDESHOW / SLIDE SET / PLAY ---
+        ' --- A/V transport cluster ---
+        If transport IsNot Nothing AndAlso transport.PlayPause.Visible Then
+            y = transport.LayoutAbove(railLeft, railW, y, gap)
+            Dim stageLeft As Integer = Panel3.Left
+            Dim stageW As Integer = Panel3.Width
+            transport.LayoutSeek(stageLeft, stageW, ClientSize.Height - margin)
+        End If
+
+        ' --- BROWSE / SLIDESHOW / SLIDE SET ---
         sbShow.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         sbBrowse.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         sbShow.Size = New Size(railW, sbShow.Height)
@@ -302,11 +475,6 @@ Public Class frmPic
         sbBrowse.BringToFront()
         sbShow.BringToFront()
         If fbSlideSettings IsNot Nothing AndAlso fbSlideSettings.Visible Then fbSlideSettings.BringToFront()
-        If fbPlayPause IsNot Nothing AndAlso fbPlayPause.Visible Then
-            fbPlayPause.Size = New Size(railW, 35)
-            fbPlayPause.Location = New Point(railLeft, sbBrowse.Top - gap - fbPlayPause.Height)
-            fbPlayPause.BringToFront()
-        End If
         fbZoomOut.BringToFront()
         fbActual.BringToFront()
         fbZoomIn.BringToFront()
@@ -462,13 +630,27 @@ Public Class frmPic
     End Sub
 
     Private Sub sbBrowse_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbBrowse.Click
-        Using dlg As New OpenFileDialog()
-            dlg.Title = "Open media"
-            dlg.Filter = "Media files|*.jpg;*.jpeg;*.gif;*.bmp;*.png;*.tif;*.tiff;*.webp;*.mp3;*.flac;*.wav;*.m4a;*.aac;*.ogg;*.wma;*.opus;*.mp4;*.mkv;*.avi;*.wmv;*.mov;*.m4v;*.webm;*.mpg;*.mpeg;*.ts|Images|*.jpg;*.jpeg;*.gif;*.bmp;*.png;*.tif;*.tiff;*.webp|Audio|*.mp3;*.flac;*.wav;*.m4a;*.aac;*.ogg;*.wma;*.opus|Video|*.mp4;*.mkv;*.avi;*.wmv;*.mov;*.m4v;*.webm;*.mpg;*.mpeg;*.ts|All files|*.*"
-            dlg.Multiselect = False
+        Using dlg As New LCARS.LCARSfileBrowseDialog(LCARS.LCARSfileBrowseDialog.LCARSDialogType.Open)
+            dlg.Fullscreen = False
+            dlg.SetFilterPatterns(
+                "*.*",
+                "*.JPG;*.JPEG;*.PNG;*.GIF;*.BMP;*.TIF;*.TIFF;*.WEBP",
+                "*.MP3;*.WAV;*.FLAC;*.M4A;*.AAC;*.OGG;*.WMA;*.OPUS",
+                "*.MP4;*.MKV;*.AVI;*.WMV;*.MOV;*.M4V;*.WEBM;*.MPG;*.MPEG;*.TS")
+            Dim startDir As String = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic)
+            If currentKind = MediaKind.Photo Then
+                startDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)
+            ElseIf currentKind = MediaKind.Video Then
+                startDir = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)
+            End If
+            If Not String.IsNullOrEmpty(currentPath) Then
+                Dim parent As String = System.IO.Path.GetDirectoryName(currentPath)
+                If Directory.Exists(parent) Then startDir = parent
+            End If
+            dlg.InitialDirectory = startDir
             If dlg.ShowDialog(Me) <> DialogResult.OK Then Return
+            If String.IsNullOrEmpty(dlg.FileName) OrElse Not File.Exists(dlg.FileName) Then Return
             LoadMedia(dlg.FileName)
-            Return
         End Using
     End Sub
 

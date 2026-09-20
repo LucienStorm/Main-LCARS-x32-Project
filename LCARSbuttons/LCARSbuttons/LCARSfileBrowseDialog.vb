@@ -1,6 +1,7 @@
 Imports System.Windows.Forms
 Imports System.IO
 Imports System.Diagnostics
+Imports System.Collections.Generic
 
 Public Class LCARSfileBrowseDialog
     Public Enum LCARSDialogType
@@ -104,15 +105,30 @@ Public Class LCARSfileBrowseDialog
 
         Else
             Dim myDirs() As String = Directory.GetDirectories(dir)
-            Dim myFiles() As String = Directory.GetFiles(dir, cboFilter.Text)
-
+            Dim myFiles As New List(Of String)
+            Dim patterns As String() = cboFilter.Text.Split(New Char() {";"c}, StringSplitOptions.RemoveEmptyEntries)
+            If patterns.Length = 0 Then patterns = New String() {"*.*"}
+            For Each pat As String In patterns
+                Dim p As String = pat.Trim()
+                If p.Length = 0 Then Continue For
+                Try
+                    myFiles.AddRange(Directory.GetFiles(dir, p))
+                Catch
+                End Try
+            Next
+            ' De-dupe when multiple patterns overlap
+            Dim uniqueFiles As New List(Of String)
+            Dim seen As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            For Each f As String In myFiles
+                If seen.Add(f) Then uniqueFiles.Add(f)
+            Next
 
             curDir = dir
-            ReDim merged((myDirs.Length + myFiles.Length) - 1)
+            ReDim merged((myDirs.Length + uniqueFiles.Count) - 1)
 
             Try
                 Array.Copy(myDirs, merged, myDirs.Length)
-                Array.Copy(myFiles, 0, merged, myDirs.Length, myFiles.Length)
+                Array.Copy(uniqueFiles.ToArray(), 0, merged, myDirs.Length, uniqueFiles.Count)
             Catch
             End Try
         End If
@@ -144,6 +160,7 @@ Public Class LCARSfileBrowseDialog
                 'it's a file
                 mybutton.Color = LCARScolorStyles.MiscFunction
                 AddHandler mybutton.Click, AddressOf myFile_Click
+                AddHandler mybutton.DoubleClick, AddressOf myFile_DoubleClick
             End If
 
 
@@ -169,7 +186,52 @@ Public Class LCARSfileBrowseDialog
     End Sub
 
     Private Sub myFile_Click(ByVal sender As Object, ByVal e As EventArgs)
-        LCARS.UI.MsgBox(sender.data)
+        Dim btn As LCARS.Controls.StandardButton = TryCast(sender, LCARS.Controls.StandardButton)
+        If btn Is Nothing OrElse btn.Data Is Nothing Then Return
+        Dim path As String = CStr(btn.Data)
+        FileName = path
+        ' Highlight selection
+        For Each c As Control In pnlFiles.Controls
+            Dim b As LCARS.Controls.StandardButton = TryCast(c, LCARS.Controls.StandardButton)
+            If b Is Nothing Then Continue For
+            If File.Exists(CStr(b.Data)) Then
+                b.Color = LCARScolorStyles.MiscFunction
+            End If
+        Next
+        btn.Color = LCARScolorStyles.PrimaryFunction
+    End Sub
+
+    Private Sub myFile_DoubleClick(ByVal sender As Object, ByVal e As EventArgs)
+        myFile_Click(sender, e)
+        If DialogType = LCARSDialogType.Open AndAlso Not String.IsNullOrEmpty(FileName) Then
+            Me.DialogResult = Windows.Forms.DialogResult.OK
+        End If
+    End Sub
+
+    ''' <summary>Optional starting folder for Open/Save.</summary>
+    Public Property InitialDirectory() As String
+        Get
+            Return curDir
+        End Get
+        Set(ByVal value As String)
+            If Not String.IsNullOrEmpty(value) AndAlso Directory.Exists(value) Then
+                curDir = value
+            End If
+        End Set
+    End Property
+
+    ''' <summary>Replace filter combo items (e.g. media globs). First item becomes active.</summary>
+    Public Sub SetFilterPatterns(ByVal ParamArray patterns As String())
+        cboFilter.Items.Clear()
+        If patterns Is Nothing OrElse patterns.Length = 0 Then
+            cboFilter.Items.Add("*.*")
+            cboFilter.Text = "*.*"
+            Return
+        End If
+        For Each p As String In patterns
+            cboFilter.Items.Add(p)
+        Next
+        cboFilter.Text = patterns(0)
     End Sub
 
     Private Sub LCARSfileBrowseDialog_VisibleChanged(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.VisibleChanged
@@ -183,6 +245,12 @@ Public Class LCARSfileBrowseDialog
     End Sub
 
     Private Sub sbSaveOK_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbSaveOK.Click
+        If DialogType = LCARSDialogType.Open Then
+            If String.IsNullOrEmpty(FileName) OrElse Not File.Exists(FileName) Then
+                LCARS.UI.MsgBox("Select a file first.", MsgBoxStyle.OkOnly, "OPEN")
+                Return
+            End If
+        End If
         Me.DialogResult = Windows.Forms.DialogResult.OK
 
     End Sub
