@@ -1340,6 +1340,15 @@ Public Class Installing
                     Using zip As Ionic.Zip.ZipFile = Ionic.Zip.ZipFile.Read(StagingFile(myComponent.name))
                         zip.ExtractAll(path, Ionic.Zip.ExtractExistingFileAction.OverwriteSilently)
                     End Using
+                    ' Keep the zip in the install folder so LCARSUpdate MD5 checks can skip re-download.
+                    Dim zipKeep As String = System.IO.Path.Combine(path, myComponent.name)
+                    Dim zipSrc As String = StagingFile(myComponent.name)
+                    If System.IO.File.Exists(zipSrc) Then
+                        Try
+                            System.IO.File.Copy(zipSrc, zipKeep, True)
+                        Catch
+                        End Try
+                    End If
                     localVersions.UpdateVersion(myComponent.name, myComponent.version)
                     localVersions.SaveFile()
                 Catch ex As Exception

@@ -126,26 +126,27 @@ foreach ($name in $deployFiles) {
     Write-Host ("{0}  {1}" -f $hash, $name)
 }
 
-# Ship LibVLC plugin tree under lib\vlc\ (relative paths in CustomVersion.txt)
+# Ship LibVLC as ONE Extract zip (not hundreds of File entries — that crashes LCARSUpdate UI).
 $vlcInstall = Join-Path $installDir "lib\vlc"
+$vlcZipName = "lib-vlc.zip"
 if (Test-Path $vlcInstall) {
-    $vlcOutRoot = Join-Path $out "lib\vlc"
-    New-Item -ItemType Directory -Force -Path $vlcOutRoot | Out-Null
-    Get-ChildItem $vlcInstall -Recurse -File | ForEach-Object {
-        $rel = $_.FullName.Substring($installDir.Length).TrimStart('\', '/')
-        $dest = Join-Path $out $rel
-        $destDir = Split-Path $dest -Parent
-        if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
-        Copy-Item $_.FullName $dest -Force
-        $hash = [BitConverter]::ToString($md5.ComputeHash([IO.File]::ReadAllBytes($_.FullName))).Replace("-", "").ToLowerInvariant()
-        $urlPath = ($rel -replace '\\', '/')
-        $lines.Add($rel.Replace('\', '/'))
-        $lines.Add($ComponentVersion)
-        $lines.Add("$downloadBase$urlPath")
-        $lines.Add($hash)
-        $lines.Add("File")
-    }
-    Write-Host "Packaged LibVLC tree from $vlcInstall"
+    $vlcStage = Join-Path $out "_vlc-zip-stage"
+    $vlcStageLib = Join-Path $vlcStage "lib\vlc"
+    New-Item -ItemType Directory -Force -Path $vlcStageLib | Out-Null
+    Copy-Item (Join-Path $vlcInstall "*") $vlcStageLib -Recurse -Force
+    $vlcZipPath = Join-Path $out $vlcZipName
+    if (Test-Path $vlcZipPath) { Remove-Item $vlcZipPath -Force }
+    # Compress-Archive paths: zip root must be "lib/..." so ExtractAll lands under install\lib\vlc\
+    Compress-Archive -Path (Join-Path $vlcStage "lib") -DestinationPath $vlcZipPath -CompressionLevel Optimal
+    Remove-Item $vlcStage -Recurse -Force
+    $hash = [BitConverter]::ToString($md5.ComputeHash([IO.File]::ReadAllBytes($vlcZipPath))).Replace("-", "").ToLowerInvariant()
+    $lines.Add($vlcZipName)
+    $lines.Add($ComponentVersion)
+    $lines.Add("$downloadBase$vlcZipName")
+    $lines.Add($hash)
+    $lines.Add("Extract")
+    Write-Host ("{0}  {1} (Extract)" -f $hash, $vlcZipName)
+    Write-Host "Packaged LibVLC tree as single zip from $vlcInstall"
 } else {
     Write-Warning "LibVLC tree missing at $vlcInstall - LCARSmedia audio/video will not play until natives are present."
 }

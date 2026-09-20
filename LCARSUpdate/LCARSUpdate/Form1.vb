@@ -181,7 +181,19 @@ Public Class frmUpdate
                 If String.IsNullOrEmpty(myEntry.name) Then
                     Continue Do
                 End If
-                If LocalFileNeedsUpdate(myEntry.name, myEntry.md5) Then
+                ' Guard: a broken manifest listing hundreds of plugins will freeze/crash the UI.
+                If updateList.Count >= 80 Then
+                    Throw New InvalidOperationException( _
+                        "Update manifest lists too many files (" & updateList.Count.ToString() & "+). " & _
+                        "Server CustomVersion.txt is likely listing individual LibVLC plugins; use a single Extract zip.")
+                End If
+                Dim needs As Boolean
+                If String.Equals(myEntry.fileClass, "Extract", StringComparison.OrdinalIgnoreCase) Then
+                    needs = ExtractNeedsUpdate(myEntry, localVersions)
+                Else
+                    needs = LocalFileNeedsUpdate(myEntry.name, myEntry.md5)
+                End If
+                If needs Then
                     updateList.Add(myEntry)
                 Else
                     ' File already matches server — keep versions.txt in sync with what is on disk.
@@ -252,6 +264,29 @@ Public Class frmUpdate
             Return True
         End If
         Return Not String.Equals(actual, expectedMd5, StringComparison.OrdinalIgnoreCase)
+    End Function
+
+    ''' <summary>
+    ''' Extract packages: skip when zip MD5 matches, or versions.txt matches and extracted payload is present.
+    ''' </summary>
+    Private Function ExtractNeedsUpdate(ByVal entry As component, ByVal localVersions As ProgramVersions) As Boolean
+        ' Prefer zip MD5 when the installer left the archive in the install folder.
+        Dim zipPath As String = System.IO.Path.Combine(Application.StartupPath, entry.name)
+        If System.IO.File.Exists(zipPath) Then
+            Dim actual As String = ComputeFileMd5(zipPath)
+            If Not String.IsNullOrEmpty(actual) AndAlso String.Equals(actual, entry.md5, StringComparison.OrdinalIgnoreCase) Then
+                Return False
+            End If
+        End If
+        If String.Equals(localVersions.getVersion(entry.name), entry.version, StringComparison.OrdinalIgnoreCase) Then
+            If String.Equals(entry.name, "lib-vlc.zip", StringComparison.OrdinalIgnoreCase) Then
+                Dim marker As String = System.IO.Path.Combine(Application.StartupPath, "lib\vlc\libvlc.dll")
+                If System.IO.File.Exists(marker) Then Return False
+            Else
+                Return False
+            End If
+        End If
+        Return True
     End Function
 
     Private Function ComputeFileMd5(ByVal filePath As String) As String
