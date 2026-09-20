@@ -1,5 +1,6 @@
 Imports System.Windows.Forms
 Imports System.IO
+Imports System.Diagnostics
 
 Public Class LCARSfileBrowseDialog
     Public Enum LCARSDialogType
@@ -214,8 +215,15 @@ Public Class LCARSfileBrowseDialog
     End Sub
 
     Private Sub sbNetwork_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbNetwork.Click
-        LCARS.UI.MsgBox("This function is not yet available.", MsgBoxStyle.OkCancel, "ERROR:")
-
+        Try
+            Dim explorer As String = System.IO.Path.Combine(Application.StartupPath, "LCARSexplorer.exe")
+            If Not System.IO.File.Exists(explorer) Then
+                explorer = "LCARSexplorer.exe"
+            End If
+            Process.Start(explorer, "NETWORK:")
+        Catch ex As Exception
+            LCARS.UI.MsgBox("Unable to open Network Places:" & vbCrLf & ex.Message, MsgBoxStyle.OkOnly, "ERROR:")
+        End Try
     End Sub
 
     Private Sub fbUpDir_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles fbUpDir.Click
