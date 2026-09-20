@@ -269,12 +269,8 @@ Public Class frmMainscreen1
         End If
     End Sub
 
-    Private Sub startMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles myPictures.Click, myMusic.Click, myDocuments.Click, myRun.Click, fbWebBrowser.Click, fbTerminal.Click, myVideos.Click, fbDesktop.Click
+    Private Sub startMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles myPictures.Click, myMusic.Click, myDocuments.Click, myRun.Click, fbWebBrowser.Click, fbTerminal.Click, myVideos.Click, fbDesktop.Click, fbMyNetwork.Click
         If pnlStart.Visible Then myStartMenu.doClick(sender, e)
-    End Sub
-
-    Private Sub fbMyNetwork_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles fbMyNetwork.Click
-        'TODO: Not implemented yet
     End Sub
 
     Public Shared ReadOnly Property ScreenImage() As Image

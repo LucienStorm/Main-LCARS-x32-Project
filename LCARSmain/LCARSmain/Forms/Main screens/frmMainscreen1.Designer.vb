@@ -1313,10 +1313,10 @@ Partial Class frmMainscreen1
         '
         Me.fbMyNetwork.ButtonText = "NETWORK PLACES"
         Me.fbMyNetwork.ButtonTextAlign = System.Drawing.ContentAlignment.TopRight
-        Me.fbMyNetwork.Clickable = False
+        Me.fbMyNetwork.Clickable = True
         Me.fbMyNetwork.Color = LCARS.LCARScolorStyles.NavigationFunction
         Me.fbMyNetwork.FlashInterval = 0
-        Me.fbMyNetwork.Lit = False
+        Me.fbMyNetwork.Lit = True
         Me.fbMyNetwork.Location = New System.Drawing.Point(0, 257)
         Me.fbMyNetwork.Name = "fbMyNetwork"
         Me.fbMyNetwork.Size = New System.Drawing.Size(100, 20)
