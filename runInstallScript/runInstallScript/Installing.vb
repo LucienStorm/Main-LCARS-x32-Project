@@ -19,19 +19,27 @@ Public Class Installing
     Private pillTimer As Timer = Nothing
     Private pills As New System.Collections.Generic.List(Of AnimPill)
     Private pillSpawnCooldown As Integer = 0
+    Private chromePulseTick As Integer = 0
+    Private scanBarX As Integer = 0
+    Private finishMenuSlide As Double = 0.0 ' 0 = hidden below, 1 = fully up
+    Private finishMenuActive As Boolean = False
+    Private Shared ReadOnly ExitWindowsHelper As New cWrapExitWindows()
     Private Const PillW As Integer = 120
     Private Const PillH As Integer = 28
     Private Const PillGap As Integer = 8
     Private Const PillMargin As Integer = 10 ' inset so pills never hug chrome edges
-    Private Const MaxLeftStack As Integer = 6
-    ' Short accept buffer — pills dwell briefly as blue, then leave (not a permanent parking lot).
-    Private Const MaxRightStack As Integer = 3
-    Private Const RightDwellTicks As Integer = 18
+    ' Keep left backlog short so parked pills stay below the top travel lane (no Y clamp).
+    Private Const MaxLeftStack As Integer = 4
+    ' ~2 accept-queue pills before the oldest exits off-screen.
+    Private Const MaxRightStack As Integer = 2
+    Private Const RightDwellTicks As Integer = 22
     Private Const ChromeInset As Integer = 18
     Private Const ChromeRail As Integer = 14
+    Private Const FinishMenuSlideStep As Double = 0.07
     Private Shared ReadOnly LcarsOrange As Color = Color.FromArgb(255, 153, 0)
     Private Shared ReadOnly LcarsBlue As Color = Color.FromArgb(51, 102, 204)
     Private Shared ReadOnly LcarsTan As Color = Color.FromArgb(204, 153, 102)
+    Private Shared ReadOnly LcarsPurple As Color = Color.FromArgb(153, 102, 204)
 
     Private Enum PillPhase
         Entering = 0   ' slide in from left into bottom of left stack
@@ -47,6 +55,9 @@ Public Class Installing
         Public Phase As PillPhase = PillPhase.Entering
         Public Slot As Integer = 0
         Public Anim As Double = 0.0 ' 0..1 within current phase
+        Public DepartFromY As Integer = 0 ' actual panel Y when DepartUp begins
+        Public RegionApplied As Boolean = False
+        Public ColorWave As Integer = 0
     End Class
 
     Private Shared ReadOnly ProtectedStagingFiles As String() = {"runInstallScript.exe", "Ionic.Zip.Reduced.dll"}
@@ -232,18 +243,16 @@ Public Class Installing
     End Sub
 
     Private Sub BringInstallButtonsToFront()
-        If sbContinue IsNot Nothing Then sbContinue.BringToFront()
-        If sbCancel IsNot Nothing Then sbCancel.BringToFront()
-        Try
-            Dim finishBtn As Control = TryCast(Me.Controls("sbFinish"), Control)
-            If finishBtn IsNot Nothing Then finishBtn.BringToFront()
-        Catch
-        End Try
+        If sbContinue IsNot Nothing AndAlso sbContinue.Visible Then sbContinue.BringToFront()
+        If sbCancel IsNot Nothing AndAlso sbCancel.Visible Then sbCancel.BringToFront()
+        If pnlFinishMenu IsNot Nothing AndAlso pnlFinishMenu.Visible Then pnlFinishMenu.BringToFront()
     End Sub
 
-    Private Sub ApplyPillRoundedRegion(ByVal pill As Panel)
-        If pill Is Nothing Then Return
+    ''' <summary>Apply rounded region once per pill — recreating every tick flashes chrome behind.</summary>
+    Private Sub EnsurePillRoundedRegion(ByVal ap As AnimPill)
+        If ap Is Nothing OrElse ap.Panel Is Nothing OrElse ap.RegionApplied Then Return
         Try
+            Dim pill As Panel = ap.Panel
             Dim rect As New Rectangle(0, 0, pill.Width, pill.Height)
             Dim radius As Integer = Math.Max(2, pill.Height \ 2)
             Dim path As New System.Drawing.Drawing2D.GraphicsPath()
@@ -253,6 +262,7 @@ Public Class Installing
             path.CloseFigure()
             If pill.Region IsNot Nothing Then pill.Region.Dispose()
             pill.Region = New Region(path)
+            ap.RegionApplied = True
         Catch
         End Try
     End Sub
@@ -262,22 +272,55 @@ Public Class Installing
         pill.Name = "pnlAnimPill"
         pill.BackColor = LcarsOrange
         pill.Size = New Size(PillW, PillH)
-        pill.Visible = True
+        ' Stay invisible until first layout sets color + position (avoids 0,0 flash).
+        pill.Visible = False
         Me.Controls.Add(pill)
-        ApplyPillRoundedRegion(pill)
         Return pill
     End Function
+
+    Private Sub SetPillColor(ByVal panel As Panel, ByVal c As Color)
+        If panel Is Nothing Then Return
+        If panel.BackColor.ToArgb() <> c.ToArgb() Then
+            panel.BackColor = c
+        End If
+    End Sub
+
+    Private Sub SetPillLocation(ByVal panel As Panel, ByVal x As Integer, ByVal y As Integer)
+        If panel Is Nothing Then Return
+        If panel.Left <> x OrElse panel.Top <> y Then
+            panel.Location = New Point(x, y)
+        End If
+    End Sub
+
+    Private Sub BeginDepartUp(ByVal top As AnimPill)
+        If top Is Nothing Then Return
+        Dim bottomY As Integer = Me.ClientSize.Height - ChromeInset - ChromeRail - PillMargin - PillH
+        Dim stackPitchY As Integer = PillH + PillGap
+        Dim fallbackY As Integer = bottomY - (MaxLeftStack - 1) * stackPitchY
+        If top.Panel IsNot Nothing AndAlso top.Panel.Visible AndAlso top.Panel.Top > ChromeInset Then
+            top.DepartFromY = top.Panel.Top
+        Else
+            top.DepartFromY = fallbackY
+        End If
+        top.Phase = PillPhase.DepartUp
+        top.Anim = 0.0
+        top.Slot = 0
+        SetPillColor(top.Panel, LcarsBlue)
+    End Sub
 
     Private Sub StartPillAnimation()
         If pillTimer IsNot Nothing Then Return
         LayoutInstallContentAwayFromAnimCorridor()
         ClearAllPills()
         pillSpawnCooldown = 0
+        chromePulseTick = 0
+        scanBarX = ChromeInset
         SpawnPillEntering()
         pillTimer = New Timer()
         pillTimer.Interval = 60
         AddHandler pillTimer.Tick, AddressOf PillTimer_Tick
         pillTimer.Start()
+        InvalidateChromeOnly()
     End Sub
 
     Private Sub StopPillAnimation()
@@ -323,6 +366,14 @@ Public Class Installing
         Return n
     End Function
 
+    Private Function CountDepartingOrAcross() As Integer
+        Dim n As Integer = 0
+        For Each p As AnimPill In pills
+            If p.Phase = PillPhase.DepartUp OrElse p.Phase = PillPhase.Across Then n += 1
+        Next
+        Return n
+    End Function
+
     Private Sub SpawnPillEntering()
         ' If the left backlog is full, the top pill must leave before a new one can enter.
         If CountLeftStack() >= MaxLeftStack Then
@@ -333,9 +384,7 @@ Public Class Installing
                 End If
             Next
             If top Is Nothing Then Return
-            top.Phase = PillPhase.DepartUp
-            top.Anim = 0.0
-            top.Slot = 0
+            BeginDepartUp(top)
             Dim lefts As New System.Collections.Generic.List(Of AnimPill)
             For Each p As AnimPill In pills
                 If p.Phase = PillPhase.LeftStack Then lefts.Add(p)
@@ -359,21 +408,54 @@ Public Class Installing
         ap.Phase = PillPhase.Entering
         ap.Slot = 0
         ap.Anim = 0.0
+        ap.ColorWave = chromePulseTick Mod 40
         pills.Add(ap)
+        EnsurePillRoundedRegion(ap)
+        SetPillColor(ap.Panel, LcarsOrange)
         LayoutAllPills()
+        If ap.Panel IsNot Nothing Then ap.Panel.Visible = True
     End Sub
 
     Private Sub PillTimer_Tick(ByVal sender As Object, ByVal e As EventArgs)
         If Me.IsDisposed Then Return
+        Try
+            PillTimer_TickCore()
+        Catch ex As Exception
+            WriteInstallLog("PillTimer overflow/guard: " & ex.Message)
+        End Try
+    End Sub
+
+    Private Sub PillTimer_TickCore()
         Const enterStep As Double = 0.045
-        Const departStep As Double = 0.035
-        Const acrossStep As Double = 0.028
-        Const exitStep As Double = 0.04
-        Const spawnEvery As Integer = 28
+        Const departStep As Double = 0.038
+        Const acrossStep As Double = 0.030
+        Const exitStep As Double = 0.042
+        ' Slightly slower spawn so ~2 stay queued on the right before exit.
+        Const spawnEvery As Integer = 24
+
+        chromePulseTick += 1
+        If chromePulseTick > 1000000 Then chromePulseTick = 0
+        scanBarX += 14
+        If scanBarX > Me.ClientSize.Width Then scanBarX = ChromeInset
+
+        If finishMenuActive AndAlso finishMenuSlide < 1.0 Then
+            finishMenuSlide = Math.Min(1.0, finishMenuSlide + FinishMenuSlideStep)
+            LayoutFinishMenu()
+        End If
 
         pillSpawnCooldown += 1
         If pillSpawnCooldown >= spawnEvery Then
             pillSpawnCooldown = 0
+            ' Prefer departing when travel lane is quiet so stack drains smoothly.
+            If CountLeftStack() >= MaxLeftStack - 1 AndAlso CountDepartingOrAcross() < 2 Then
+                Dim top As AnimPill = Nothing
+                For Each p As AnimPill In pills
+                    If p.Phase = PillPhase.LeftStack AndAlso (top Is Nothing OrElse p.Slot > top.Slot) Then
+                        top = p
+                    End If
+                Next
+                If top IsNot Nothing Then BeginDepartUp(top)
+            End If
             SpawnPillEntering()
         End If
 
@@ -391,6 +473,7 @@ Public Class Installing
                     End If
                 Case PillPhase.LeftStack
                     ' Parked until pushed up / promoted by a new entrant.
+                    p.ColorWave = (p.ColorWave + 1) Mod 4000
                 Case PillPhase.DepartUp
                     p.Anim += departStep
                     If p.Anim >= 1.0 Then
@@ -415,9 +498,9 @@ Public Class Installing
                         p.Anim = 0.0 ' dwell counter (ticks via RightDwellTicks)
                     End If
                 Case PillPhase.RightStack
-                    ' Buffer at the accept gate, then drain — looks queued, not permanently parked.
+                    ' Buffer at the accept gate; overflow exit is handled when a new Across arrives.
                     p.Anim += 1.0
-                    If p.Anim >= RightDwellTicks OrElse p.Slot >= MaxRightStack - 1 Then
+                    If p.Anim >= RightDwellTicks Then
                         p.Phase = PillPhase.Exiting
                         p.Anim = 0.0
                         p.Slot = 0
@@ -439,18 +522,50 @@ Public Class Installing
         End While
 
         LayoutAllPills()
+        InvalidateChromeOnly()
         BringInstallButtonsToFront()
     End Sub
 
     Private Sub PromoteOverflowLeftTop()
         For Each p As AnimPill In pills
             If p.Phase = PillPhase.LeftStack AndAlso p.Slot >= MaxLeftStack Then
-                p.Phase = PillPhase.DepartUp
-                p.Anim = 0.0
-                p.Slot = 0
+                BeginDepartUp(p)
             End If
         Next
     End Sub
+
+    Private Function PillWaveColor(ByVal baseOrange As Boolean, ByVal wave As Integer) As Color
+        ' Soft secondary pulse between orange and tan / blue and purple — no full-form flash.
+        Dim phase As Integer = Math.Abs(wave Mod 40)
+        If phase > 20 Then phase = 40 - phase
+        Dim t As Double = phase / 20.0
+        If baseOrange Then
+            Return BlendColor(LcarsOrange, LcarsTan, t * 0.35)
+        End If
+        Return BlendColor(LcarsBlue, LcarsPurple, t * 0.28)
+    End Function
+
+    Private Shared Function BlendColor(ByVal a As Color, ByVal b As Color, ByVal t As Double) As Color
+        If t <= 0 Then Return a
+        If t >= 1 Then Return b
+        ' Cast Bytes to Integer first — VB Byte arithmetic overflows (checked) on orange↔tan blends.
+        Dim ar As Integer = a.R
+        Dim ag As Integer = a.G
+        Dim ab As Integer = a.B
+        Dim br As Integer = b.R
+        Dim bg As Integer = b.G
+        Dim bb As Integer = b.B
+        Dim r As Integer = CInt(ar + (br - ar) * t)
+        Dim g As Integer = CInt(ag + (bg - ag) * t)
+        Dim bl As Integer = CInt(ab + (bb - ab) * t)
+        If r < 0 Then r = 0
+        If r > 255 Then r = 255
+        If g < 0 Then g = 0
+        If g > 255 Then g = 255
+        If bl < 0 Then bl = 0
+        If bl > 255 Then bl = 255
+        Return Color.FromArgb(r, g, bl)
+    End Function
 
     Private Sub LayoutAllPills()
         Dim leftX As Integer = ChromeInset + ChromeRail + PillMargin
@@ -463,42 +578,52 @@ Public Class Installing
 
         For Each p As AnimPill In pills
             If p.Panel Is Nothing Then Continue For
+            EnsurePillRoundedRegion(p)
             Select Case p.Phase
                 Case PillPhase.Entering
                     Dim startX As Integer = leftX - PillW - PillMargin
                     Dim x As Integer = CInt(startX + (leftX - startX) * Math.Min(1.0, p.Anim))
-                    p.Panel.Location = New Point(x, bottomY)
-                    p.Panel.BackColor = LcarsOrange
+                    SetPillLocation(p.Panel, x, bottomY)
+                    SetPillColor(p.Panel, LcarsOrange)
                 Case PillPhase.LeftStack
+                    ' Do NOT clamp into the top travel lane — that made one pill "stop short".
                     Dim y As Integer = bottomY - p.Slot * stackPitchY
-                    If y < topY + stackPitchY Then y = topY + stackPitchY
-                    p.Panel.Location = New Point(leftX, y)
-                    p.Panel.BackColor = LcarsOrange
+                    SetPillLocation(p.Panel, leftX, y)
+                    SetPillColor(p.Panel, PillWaveColor(True, p.ColorWave + p.Slot * 3))
                 Case PillPhase.DepartUp
-                    Dim fromY As Integer = bottomY - (MaxLeftStack - 1) * stackPitchY
-                    If fromY < topY + stackPitchY Then fromY = topY + stackPitchY
+                    Dim fromY As Integer = p.DepartFromY
+                    If fromY <= 0 Then fromY = bottomY - (MaxLeftStack - 1) * stackPitchY
                     Dim y As Integer = CInt(fromY + (topY - fromY) * Math.Min(1.0, p.Anim))
-                    p.Panel.Location = New Point(leftX, y)
-                    p.Panel.BackColor = LcarsBlue
+                    SetPillLocation(p.Panel, leftX, y)
+                    SetPillColor(p.Panel, LcarsBlue)
                 Case PillPhase.Across
                     Dim x As Integer = CInt(leftX + (rightClusterLeft - leftX) * Math.Min(1.0, p.Anim))
-                    p.Panel.Location = New Point(x, topY)
-                    ' Solid blue while traveling — tan flash read as a yellow rectangle in the upper-left.
-                    p.Panel.BackColor = LcarsBlue
+                    SetPillLocation(p.Panel, x, topY)
+                    SetPillColor(p.Panel, LcarsBlue)
                 Case PillPhase.RightStack
-                    ' Horizontal accept buffer: slot 0 = intake (left), higher slots shift toward exit.
                     Dim x As Integer = rightClusterLeft + p.Slot * stackPitchX
-                    p.Panel.Location = New Point(x, topY)
-                    p.Panel.BackColor = LcarsBlue
+                    SetPillLocation(p.Panel, x, topY)
+                    SetPillColor(p.Panel, PillWaveColor(False, CInt(Math.Min(p.Anim, 10000.0)) + p.Slot * 5))
                 Case PillPhase.Exiting
                     Dim startX As Integer = rightClusterLeft + (MaxRightStack - 1) * stackPitchX
                     Dim endX As Integer = Me.ClientSize.Width + PillMargin
                     Dim x As Integer = CInt(startX + (endX - startX) * Math.Min(1.0, p.Anim))
-                    p.Panel.Location = New Point(x, topY)
-                    p.Panel.BackColor = LcarsBlue
+                    SetPillLocation(p.Panel, x, topY)
+                    SetPillColor(p.Panel, LcarsBlue)
             End Select
-            p.Panel.BringToFront()
+            If Not p.Panel.Visible Then p.Panel.Visible = True
         Next
+    End Sub
+
+    Private Sub InvalidateChromeOnly()
+        Dim w As Integer = Me.ClientSize.Width
+        Dim h As Integer = Me.ClientSize.Height
+        Dim inset As Integer = ChromeInset
+        Dim rail As Integer = ChromeRail
+        ' Top rail + elbow corner only — avoid full-form Invalidate (yellow flash).
+        Me.Invalidate(New Rectangle(inset, inset, w - inset * 2, rail + 8))
+        Me.Invalidate(New Rectangle(inset, inset, rail + 8, Math.Min(h - inset * 2, 120)))
+        Me.Invalidate(New Rectangle(inset, h - inset - rail - 4, w - inset * 2, rail + 8))
     End Sub
 
     Protected Overrides Sub OnPaint(ByVal e As PaintEventArgs)
@@ -508,24 +633,98 @@ Public Class Installing
         Dim h As Integer = Me.ClientSize.Height
         Dim inset As Integer = ChromeInset
         Dim rail As Integer = ChromeRail
-        Using brushOrange As New SolidBrush(LcarsOrange)
-            Using brushBlue As New SolidBrush(LcarsBlue)
-                    ' Top rail
-                    g.FillRectangle(brushOrange, inset, inset, w - inset * 2 - 80, rail)
-                    g.FillRectangle(brushBlue, w - inset - 70, inset, 70, rail)
-                    ' Left rail
-                    g.FillRectangle(brushOrange, inset, inset + rail, rail, h - inset * 2 - rail * 2 - 40)
-                    ' Bottom rail — clear left entry lane (no elbow block in the pill path)
-                    g.FillRectangle(brushOrange, inset, h - inset - rail, w - inset * 2 - 220, rail)
-                    ' Bottom-right accent near buttons
-                    g.FillRectangle(brushBlue, w - inset - 110, h - inset - rail, 110, rail)
+
+        ' Pulsing elbow / rail brightness
+        Dim pulse As Double = (Math.Sin(chromePulseTick * 0.12) + 1.0) * 0.5
+        Dim railOrange As Color = BlendColor(LcarsOrange, Color.FromArgb(255, 200, 80), pulse * 0.45)
+        Dim elbowBlue As Color = BlendColor(LcarsBlue, Color.FromArgb(90, 150, 255), pulse * 0.4)
+
+        Using brushOrange As New SolidBrush(railOrange)
+            Using brushBlue As New SolidBrush(elbowBlue)
+                ' Top rail (starts after curved elbow)
+                Dim elbowSize As Integer = Math.Max(36, rail * 3)
+                g.FillRectangle(brushOrange, inset + elbowSize - 4, inset, w - inset * 2 - elbowSize - 70, rail)
+                g.FillRectangle(brushBlue, w - inset - 70, inset, 70, rail)
+                ' Left rail under elbow
+                g.FillRectangle(brushOrange, inset, inset + elbowSize - 4, rail, h - inset * 2 - elbowSize - rail - 40)
+                ' Curved upper-left elbow (not a square block)
+                FillLcarsElbow(g, brushBlue, New Rectangle(inset, inset, elbowSize, elbowSize), ElbowCorner.UpperLeft, rail, rail)
+                ' Bottom rail — clear left entry lane (no elbow block in the pill path)
+                g.FillRectangle(brushOrange, inset, h - inset - rail, w - inset * 2 - 220, rail)
+                ' Bottom-right accent near buttons
+                g.FillRectangle(brushBlue, w - inset - 110, h - inset - rail, 110, rail)
             End Using
+        End Using
+
+        ' Scanning bar along top rail
+        Dim scanW As Integer = 48
+        Dim scanLeft As Integer = Math.Max(inset + 40, Math.Min(scanBarX, w - inset - scanW - 80))
+        Using brushScan As New SolidBrush(Color.FromArgb(180, 255, 220, 120))
+            g.FillRectangle(brushScan, scanLeft, inset + 2, scanW, Math.Max(2, rail - 4))
+        End Using
+    End Sub
+
+    Private Enum ElbowCorner
+        UpperLeft = 0
+        UpperRight = 1
+        LowerLeft = 2
+        LowerRight = 3
+    End Enum
+
+    ''' <summary>
+    ''' Draws a curved LCARS elbow (same geometry as LCARS.Controls.Elbow), not a square block.
+    ''' </summary>
+    Private Shared Sub FillLcarsElbow(ByVal g As Graphics, ByVal brush As Brush, ByVal bounds As Rectangle, ByVal corner As ElbowCorner, ByVal barW As Integer, ByVal barH As Integer)
+        If bounds.Width < 8 OrElse bounds.Height < 8 Then Return
+        Dim w As Integer = bounds.Width
+        Dim h As Integer = bounds.Height
+        barW = Math.Max(4, Math.Min(barW, w - 2))
+        barH = Math.Max(4, Math.Min(barH, h - 2))
+
+        Using bmp As New Bitmap(w, h)
+            Using bg As Graphics = Graphics.FromImage(bmp)
+                bg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias
+                bg.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality
+                bg.Clear(Color.Black)
+                ' Native UpperLeft elbow construction (matches Elbow.DrawButton)
+                bg.FillEllipse(brush, 0, 0, h, h)
+                bg.FillRectangle(brush, 0, h \ 2, barW, (h \ 2) + (h \ 4))
+                bg.FillRectangle(brush, h \ 2, 0, w - (h \ 2), barH)
+                bg.FillRectangle(brush, h \ 2, barH, Math.Max(0, barW - (h \ 2)), h - barH)
+                bg.FillRectangle(Brushes.Black, barW, barH, w - barW, h - barH)
+                bg.FillRectangle(brush, barW, barH, h \ 4, h \ 4)
+                bg.FillEllipse(Brushes.Black, barW, barH, h \ 2, h \ 2)
+            End Using
+
+            Select Case corner
+                Case ElbowCorner.UpperLeft
+                    g.DrawImageUnscaled(bmp, bounds.X, bounds.Y)
+                Case Else
+                    Dim pts(2) As Point
+                    Select Case corner
+                        Case ElbowCorner.UpperRight
+                            pts(0) = New Point(bounds.Right, bounds.Top)
+                            pts(1) = New Point(bounds.Left, bounds.Top)
+                            pts(2) = New Point(bounds.Right, bounds.Bottom)
+                        Case ElbowCorner.LowerRight
+                            pts(0) = New Point(bounds.Right, bounds.Bottom)
+                            pts(1) = New Point(bounds.Left, bounds.Bottom)
+                            pts(2) = New Point(bounds.Right, bounds.Top)
+                        Case ElbowCorner.LowerLeft
+                            pts(0) = New Point(bounds.Left, bounds.Bottom)
+                            pts(1) = New Point(bounds.Right, bounds.Bottom)
+                            pts(2) = New Point(bounds.Left, bounds.Top)
+                    End Select
+                    g.DrawImage(bmp, pts)
+            End Select
         End Using
     End Sub
 
     Protected Overrides Sub OnResize(ByVal e As EventArgs)
         MyBase.OnResize(e)
-        Me.Invalidate()
+        LayoutInstallContentAwayFromAnimCorridor()
+        If finishMenuActive Then LayoutFinishMenu()
+        InvalidateChromeOnly()
     End Sub
 
     Private Function ResolveStagingDirectory() As String
@@ -718,7 +917,7 @@ Public Class Installing
             Dim lcarsApps As String() = New String() {
                 "LCARSmain", "LCARSUpdate", "LCARSWebBrowser", "OnScreenKeyboard",
                 "LCARSTerminal", "LCARSexplorer", "LCARSshutdown",
-                "LCARSengineering", "LCARSpic", "LCARSdestruct"
+                "LCARSengineering", "LCARSmedia", "LCARSpic", "LCARSdestruct"
             }
             ' Short polite wait, then force — never sit on Deactivate for 45s.
             If x32Handle <> IntPtr.Zero Then
@@ -744,13 +943,6 @@ Public Class Installing
             InstallThread = New System.Threading.Thread(AddressOf InstallComponents)
             'Start the thread
             InstallThread.Start()
-        Else
-            If InstallThread IsNot Nothing AndAlso InstallThread.IsAlive Then
-                InstallThread.Join(30000)
-            End If
-            ClearTempDirectory()
-            restartLcarsAfterClose = True
-            Me.Close()
         End If
     End Sub
 
@@ -1279,9 +1471,9 @@ Public Class Installing
 
     Private Sub Me_UpdateCompleteUi()
         pnlInstalling.Visible = False
-        sbContinue.Text = "Finish"
-        sbContinue.Visible = True
-        StopPillAnimation()
+        sbContinue.Visible = False
+        sbCancel.Visible = False
+        ' Keep pill corridor running while the finish submenu is available.
         ApplyFullScreenBounds()
         If Not failed Then
             Dim oskNote As String = ""
@@ -1295,10 +1487,16 @@ Public Class Installing
                 End If
             Catch
             End Try
+            If lblTitle IsNot Nothing Then
+                lblTitle.Text = "Data Transfer complete"
+            End If
             lblMessage.Text = "Update complete. You are now running version " & version & vbNewLine & _
-                              "Press Finish to return to LCARS." & oskNote & vbNewLine & _
+                              "Choose an option from the system menu." & oskNote & vbNewLine & _
                               "Log: " & CrashLogPath()
         Else
+            If lblTitle IsNot Nothing Then
+                lblTitle.Text = "Data Transfer incomplete"
+            End If
             lblMessage.Text = "Some components failed to update. Please re-run LCARSUpdate.exe to correct this problem." & vbNewLine & _
                               "Log: " & CrashLogPath()
             If Not String.IsNullOrEmpty(lastInstallError) Then
@@ -1306,7 +1504,280 @@ Public Class Installing
             End If
             ShellFallback.EnsureExplorerRunning()
         End If
-        If sbContinue IsNot Nothing Then sbContinue.BringToFront()
+        ShowFinishMenu()
+    End Sub
+
+    Private Sub ShowFinishMenu()
+        finishMenuActive = True
+        finishMenuSlide = 0.0
+        If pnlFinishMenu IsNot Nothing Then
+            LayoutFinishMenuContents()
+            ApplyFinishMenuPillShapes()
+            pnlFinishMenu.Visible = True
+            LayoutFinishMenu()
+            pnlFinishMenu.BringToFront()
+        End If
+        ' Ensure the animation timer is running so the slide + pills continue.
+        If pillTimer Is Nothing Then
+            StartPillAnimation()
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' Sizes the finish panel and stacks options with a double-height primary FINISHED choice.
+    ''' </summary>
+    Private Sub LayoutFinishMenuContents()
+        If pnlFinishMenu Is Nothing Then Return
+        Const chromePad As Integer = 38
+        Const sidePad As Integer = 18
+        Const btnH As Integer = 32
+        Const finishH As Integer = 64
+        Const gap As Integer = 6
+        Const menuInnerW As Integer = 220
+
+        Dim menuW As Integer = chromePad + menuInnerW + sidePad
+        Dim y As Integer = chromePad + 2
+        If lblFinishMenuTitle IsNot Nothing Then
+            lblFinishMenuTitle.Location = New Point(chromePad, y)
+            lblFinishMenuTitle.Size = New Size(menuInnerW, 22)
+            lblFinishMenuTitle.TextAlign = ContentAlignment.MiddleLeft
+            y += 26
+        End If
+
+        Dim optionBtns() As Button = {
+            btnHibernate, btnSuspend, btnLock, btnLogOff,
+            btnRestart, btnShutDown, btnCloseLcars
+        }
+        For Each b As Button In optionBtns
+            If b Is Nothing Then Continue For
+            b.Location = New Point(chromePad, y)
+            b.Size = New Size(menuInnerW, btnH)
+            b.TextAlign = ContentAlignment.MiddleRight
+            b.Padding = New Padding(0, 0, 12, 0)
+            y += btnH + gap
+        Next
+
+        ' Blank spacer, then the primary (default) choice — twice as tall.
+        y += 8
+        If btnFinished IsNot Nothing Then
+            btnFinished.Location = New Point(chromePad, y)
+            btnFinished.Size = New Size(menuInnerW, finishH)
+            btnFinished.Text = ""
+            btnFinished.TextAlign = ContentAlignment.MiddleCenter
+            btnFinished.Padding = New Padding(8, 4, 8, 4)
+            y += finishH
+        End If
+
+        Dim menuH As Integer = y + chromePad
+        pnlFinishMenu.Size = New Size(menuW, menuH)
+        pnlFinishMenu.BorderStyle = BorderStyle.None
+        pnlFinishMenu.Padding = New Padding(0)
+    End Sub
+
+    ''' <summary>LCARS pill silhouette on finish-menu buttons (WinForms Button + Region).</summary>
+    Private Sub ApplyFinishMenuPillShapes()
+        Dim btns() As Button = {
+            btnHibernate, btnSuspend, btnLock, btnLogOff,
+            btnRestart, btnShutDown, btnCloseLcars, btnFinished
+        }
+        For Each b As Button In btns
+            If b Is Nothing Then Continue For
+            b.FlatStyle = FlatStyle.Flat
+            b.FlatAppearance.BorderSize = 0
+            Try
+                Dim rect As New Rectangle(0, 0, Math.Max(1, b.Width), Math.Max(1, b.Height))
+                Dim radius As Integer = Math.Max(2, Math.Min(rect.Height \ 2, 28))
+                Dim diameter As Integer = radius * 2
+                Dim path As New System.Drawing.Drawing2D.GraphicsPath()
+                path.AddArc(rect.X, rect.Y, diameter, diameter, 90, 180)
+                path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 180)
+                path.CloseFigure()
+                If b.Region IsNot Nothing Then b.Region.Dispose()
+                b.Region = New Region(path)
+            Catch
+            End Try
+        Next
+    End Sub
+
+    Private Sub LayoutFinishMenu()
+        If pnlFinishMenu Is Nothing Then Return
+        LayoutFinishMenuContents()
+        ApplyFinishMenuPillShapes()
+        Dim menuW As Integer = pnlFinishMenu.Width
+        Dim menuH As Integer = pnlFinishMenu.Height
+        Dim margin As Integer = ChromeInset + ChromeRail + 8
+        Dim targetLeft As Integer = Me.ClientSize.Width - menuW - margin
+        Dim targetTop As Integer = Me.ClientSize.Height - menuH - margin
+        If targetLeft < margin Then targetLeft = margin
+        If targetTop < margin Then targetTop = margin
+        Dim startTop As Integer = Me.ClientSize.Height + 8
+        Dim y As Integer = CInt(startTop + (targetTop - startTop) * Math.Min(1.0, finishMenuSlide))
+        pnlFinishMenu.Location = New Point(targetLeft, y)
+    End Sub
+
+    ''' <summary>Draws LCARS rails and curved elbows around the finish options panel.</summary>
+    Private Sub pnlFinishMenu_Paint(ByVal sender As Object, ByVal e As PaintEventArgs) Handles pnlFinishMenu.Paint
+        Dim g As Graphics = e.Graphics
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias
+        Dim w As Integer = pnlFinishMenu.ClientSize.Width
+        Dim h As Integer = pnlFinishMenu.ClientSize.Height
+        If w < 40 OrElse h < 40 Then Return
+
+        Const rail As Integer = 10
+        Const elbow As Integer = 36
+        Const endCap As Integer = 10
+
+        Using brushOrange As New SolidBrush(LcarsOrange)
+            Using brushBlue As New SolidBrush(LcarsBlue)
+                Using brushTan As New SolidBrush(LcarsTan)
+                    ' Top rail + right end cap (elbow drawn after so it covers the join)
+                    g.FillRectangle(brushOrange, elbow - 4, 0, Math.Max(0, w - elbow - endCap + 4), rail)
+                    g.FillRectangle(brushTan, w - endCap, 0, endCap, rail)
+
+                    ' Left vertical rail under the elbow
+                    g.FillRectangle(brushOrange, 0, elbow - 4, rail, Math.Max(0, h - elbow - elbow + 8))
+
+                    ' Bottom rail
+                    g.FillRectangle(brushOrange, rail, h - rail, Math.Max(0, w - rail - elbow + 4), rail)
+
+                    ' Right vertical accent
+                    g.FillRectangle(brushTan, w - rail, elbow, rail, Math.Max(0, h - elbow * 2))
+
+                    ' Curved elbows (not square blocks)
+                    FillLcarsElbow(g, brushBlue, New Rectangle(0, 0, elbow, elbow), ElbowCorner.UpperLeft, rail, rail)
+                    FillLcarsElbow(g, brushBlue, New Rectangle(w - elbow, h - elbow, elbow, elbow), ElbowCorner.LowerRight, rail, rail)
+                End Using
+            End Using
+        End Using
+
+        ' Thin inner guide line so content reads as inset from the chrome
+        Using pen As New Pen(Color.FromArgb(90, LcarsOrange), 1)
+            Dim inset As Integer = rail + 4
+            g.DrawRectangle(pen, inset, inset, w - inset * 2 - 1, h - inset * 2 - 1)
+        End Using
+    End Sub
+
+    Private Sub btnFinished_Paint(ByVal sender As Object, ByVal e As PaintEventArgs) Handles btnFinished.Paint
+        Dim b As Button = TryCast(sender, Button)
+        If b Is Nothing Then Return
+        Dim g As Graphics = e.Graphics
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias
+        Using brush As New SolidBrush(b.BackColor)
+            g.FillRectangle(brush, b.ClientRectangle)
+        End Using
+        Dim main As String = "FINISHED"
+        Dim subText As String = "(Return to LCARS)"
+        Using fMain As New Font("Segoe UI", 12.0F, FontStyle.Bold)
+            Using fSub As New Font("Segoe UI", 8.25F, FontStyle.Regular)
+                Using brushText As New SolidBrush(b.ForeColor)
+                    Dim mainSize As SizeF = g.MeasureString(main, fMain)
+                    Dim subSize As SizeF = g.MeasureString(subText, fSub)
+                    Dim totalH As Single = mainSize.Height + subSize.Height + 2.0F
+                    Dim top As Single = (b.ClientSize.Height - totalH) / 2.0F
+                    Dim mainX As Single = (b.ClientSize.Width - mainSize.Width) / 2.0F
+                    Dim subX As Single = (b.ClientSize.Width - subSize.Width) / 2.0F
+                    g.DrawString(main, fMain, brushText, mainX, top)
+                    g.DrawString(subText, fSub, brushText, subX, top + mainSize.Height + 1.0F)
+                End Using
+            End Using
+        End Using
+    End Sub
+
+    Private Sub WaitInstallThreadThen(ByVal action As MethodInvoker)
+        If InstallThread IsNot Nothing AndAlso InstallThread.IsAlive Then
+            InstallThread.Join(30000)
+        End If
+        If action IsNot Nothing Then action()
+    End Sub
+
+    Private Sub btnFinished_Click(ByVal sender As Object, ByVal e As EventArgs) Handles btnFinished.Click
+        WaitInstallThreadThen(AddressOf DoFinishedReturnToLcars)
+    End Sub
+
+    Private Sub DoFinishedReturnToLcars()
+        ClearTempDirectory()
+        restartLcarsAfterClose = True
+        Me.Close()
+    End Sub
+
+    Private Sub btnHibernate_Click(ByVal sender As Object, ByVal e As EventArgs) Handles btnHibernate.Click
+        Try
+            Application.SetSuspendState(PowerState.Hibernate, True, False)
+        Catch ex As Exception
+            WriteInstallLog("Hibernate failed: " & ex.Message)
+        End Try
+    End Sub
+
+    Private Sub btnSuspend_Click(ByVal sender As Object, ByVal e As EventArgs) Handles btnSuspend.Click
+        Try
+            Application.SetSuspendState(PowerState.Suspend, True, False)
+        Catch ex As Exception
+            WriteInstallLog("Suspend failed: " & ex.Message)
+        End Try
+    End Sub
+
+    Private Sub btnLock_Click(ByVal sender As Object, ByVal e As EventArgs) Handles btnLock.Click
+        Try
+            Dim lockExe As String = ""
+            If Not String.IsNullOrEmpty(path) Then
+                lockExe = System.IO.Path.Combine(path, "LCARSLock.exe")
+            End If
+            If String.IsNullOrEmpty(lockExe) OrElse Not System.IO.File.Exists(lockExe) Then
+                lockExe = System.IO.Path.Combine(Application.StartupPath, "LCARSLock.exe")
+            End If
+            If System.IO.File.Exists(lockExe) Then
+                Process.Start(lockExe)
+            Else
+                WriteInstallLog("LCARSLock.exe not found for Lock.")
+            End If
+        Catch ex As Exception
+            WriteInstallLog("Lock failed: " & ex.Message)
+        End Try
+    End Sub
+
+    Private Sub btnLogOff_Click(ByVal sender As Object, ByVal e As EventArgs) Handles btnLogOff.Click
+        WaitInstallThreadThen(AddressOf DoLogOff)
+    End Sub
+
+    Private Sub DoLogOff()
+        restartLcarsAfterClose = False
+        ClearTempDirectory()
+        ShellFallback.ClearUpdateInProgressFlag()
+        ExitWindowsHelper.ExitWindows(cWrapExitWindows.Action.LogOff)
+    End Sub
+
+    Private Sub btnRestart_Click(ByVal sender As Object, ByVal e As EventArgs) Handles btnRestart.Click
+        WaitInstallThreadThen(AddressOf DoRestart)
+    End Sub
+
+    Private Sub DoRestart()
+        restartLcarsAfterClose = False
+        ClearTempDirectory()
+        ShellFallback.ClearUpdateInProgressFlag()
+        ExitWindowsHelper.ExitWindows(cWrapExitWindows.Action.Restart)
+    End Sub
+
+    Private Sub btnShutDown_Click(ByVal sender As Object, ByVal e As EventArgs) Handles btnShutDown.Click
+        WaitInstallThreadThen(AddressOf DoShutDown)
+    End Sub
+
+    Private Sub DoShutDown()
+        restartLcarsAfterClose = False
+        ClearTempDirectory()
+        ShellFallback.ClearUpdateInProgressFlag()
+        ExitWindowsHelper.ExitWindows(cWrapExitWindows.Action.Shutdown)
+    End Sub
+
+    Private Sub btnCloseLcars_Click(ByVal sender As Object, ByVal e As EventArgs) Handles btnCloseLcars.Click
+        WaitInstallThreadThen(AddressOf DoCloseToDesktop)
+    End Sub
+
+    Private Sub DoCloseToDesktop()
+        restartLcarsAfterClose = False
+        ClearTempDirectory()
+        RestoreSystemWorkArea()
+        ShellFallback.EnsureExplorerRunningIfNeeded()
+        Me.Close()
     End Sub
 
     Private Sub Me_ShowMessage(ByVal Message As String) Handles Me.DisplayMessage

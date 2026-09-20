@@ -8,10 +8,10 @@ Imports System.Runtime.InteropServices
 
 ' Review the values of the assembly attributes
 
-<Assembly: AssemblyTitle("LCARSpic")> 
-<Assembly: AssemblyDescription("")> 
+<Assembly: AssemblyTitle("LCARSmedia")> 
+<Assembly: AssemblyDescription("LCARS Media Player")> 
 <Assembly: AssemblyCompany("")> 
-<Assembly: AssemblyProduct("LCARSpic")> 
+<Assembly: AssemblyProduct("LCARSmedia")> 
 <Assembly: AssemblyCopyright("Copyright ©  2009")> 
 <Assembly: AssemblyTrademark("")> 
 

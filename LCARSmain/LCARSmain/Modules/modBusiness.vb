@@ -290,7 +290,7 @@ public Class modBusiness
 
     Public Sub myPhoto_Click(ByVal sender As Object, ByVal e As System.EventArgs)
         Dim myProcess As New Process()
-        myProcess.StartInfo.FileName = Application.StartupPath & "\LCARSpic.exe"
+        myProcess.StartInfo.FileName = Application.StartupPath & "\LCARSmedia.exe"
         launchProcessOnScreen(myProcess)
     End Sub
 

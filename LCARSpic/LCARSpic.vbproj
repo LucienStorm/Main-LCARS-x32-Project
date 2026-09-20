@@ -12,8 +12,11 @@
     <OutputType>WinExe</OutputType>
     <StartupObject>LCARSpic.My.MyApplication</StartupObject>
     <RootNamespace>LCARSpic</RootNamespace>
-    <AssemblyName>LCARSpic</AssemblyName>
+    <AssemblyName>LCARSmedia</AssemblyName>
     <MyType>WindowsForms</MyType>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFrameworkProfile />
+    <OptionStrict>On</OptionStrict>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>2.0</OldToolsVersion>
@@ -46,8 +49,9 @@
     <DefineDebug>true</DefineDebug>
     <DefineTrace>true</DefineTrace>
     <OutputPath>bin\Debug\</OutputPath>
-    <DocumentationFile>LCARSpic.xml</DocumentationFile>
+    <DocumentationFile>LCARSmedia.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+    <PlatformTarget>x86</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -55,10 +59,15 @@
     <DefineTrace>true</DefineTrace>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DocumentationFile>LCARSpic.xml</DocumentationFile>
+    <DocumentationFile>LCARSmedia.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+    <PlatformTarget>x86</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="LibVLCSharp">
+      <HintPath>lib\LibVLCSharp.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
@@ -77,6 +86,9 @@
     <Import Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Media\MediaKind.vb" />
+    <Compile Include="Media\MediaSessionIpc.vb" />
+    <Compile Include="Media\VlcPlaybackHost.vb" />
     <Compile Include="frmPic.designer.vb">
       <DependentUpon>frmPic.vb</DependentUpon>
     </Compile>
@@ -156,11 +168,10 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.VisualBasic.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
   <Target Name="AfterBuild">
+    <ItemGroup>
+      <VlcFiles Include="$(MSBuildProjectDirectory)\lib\vlc\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(VlcFiles)" DestinationFiles="@(VlcFiles->'$(OutputPath)lib\vlc\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
-  -->
 </Project>
