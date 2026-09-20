@@ -21,7 +21,7 @@ Partial Class frmSettings
     Private Sub InitializeComponent()
         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmSettings))
         Me.tbTitle = New LCARS.Controls.TextButton
-        Me.sbExitMyComp = New LCARS.Controls.StandardButton
+        Me.sbExitMyComp = New LCARS.Controls.FlatButton
         Me.ltcSettings = New LCARS.Controls.x32TabControl
         Me.tabScreenSpecific = New LCARS.Controls.x32TabPage
         Me.pnlScreenSpecific = New System.Windows.Forms.Panel
@@ -30,6 +30,8 @@ Partial Class frmSettings
         Me.tglAutoHide = New LCARS.Controls.ToggleButton
         Me.Label4 = New System.Windows.Forms.Label
         Me.FlatButton1 = New LCARS.Controls.FlatButton
+        Me.fbFolders = New LCARS.Controls.FlatButton
+        Me.pnlFolders = New System.Windows.Forms.Panel
         Me.pnlLanguage = New System.Windows.Forms.Panel
         Me.txtLanguagePreview = New System.Windows.Forms.TextBox
         Me.Label14 = New System.Windows.Forms.Label
@@ -145,6 +147,7 @@ Partial Class frmSettings
         Me.tabScreenSpecific.SuspendLayout()
         Me.pnlScreenSpecific.SuspendLayout()
         Me.pnlMainScreen.SuspendLayout()
+        Me.pnlFolders.SuspendLayout()
         Me.pnlLanguage.SuspendLayout()
         Me.pnlWallpaper.SuspendLayout()
         CType(Me.picWallpaper, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -179,13 +182,12 @@ Partial Class frmSettings
         'sbExitMyComp
         '
         Me.sbExitMyComp.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.sbExitMyComp.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
         Me.sbExitMyComp.ButtonText = "CLOSE"
         Me.sbExitMyComp.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.sbExitMyComp.Color = LCARS.LCARScolorStyles.FunctionOffline
-        Me.sbExitMyComp.Location = New System.Drawing.Point(692, 564)
+        Me.sbExitMyComp.Location = New System.Drawing.Point(688, 553)
         Me.sbExitMyComp.Name = "sbExitMyComp"
-        Me.sbExitMyComp.Size = New System.Drawing.Size(100, 28)
+        Me.sbExitMyComp.Size = New System.Drawing.Size(100, 35)
         Me.sbExitMyComp.TabIndex = 57
         Me.sbExitMyComp.Text = "CLOSE"
         '
@@ -243,9 +245,11 @@ Partial Class frmSettings
                     Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.pnlScreenSpecific.Controls.Add(Me.pnlWallpaper)
         Me.pnlScreenSpecific.Controls.Add(Me.pnlMainScreen)
+        Me.pnlScreenSpecific.Controls.Add(Me.pnlFolders)
         Me.pnlScreenSpecific.Controls.Add(Me.FlatButton1)
         Me.pnlScreenSpecific.Controls.Add(Me.pnlLanguage)
         Me.pnlScreenSpecific.Controls.Add(Me.fbBack)
+        Me.pnlScreenSpecific.Controls.Add(Me.fbFolders)
         Me.pnlScreenSpecific.Controls.Add(Me.fbLanguage)
         Me.pnlScreenSpecific.Controls.Add(Me.fbMainScreen)
         Me.pnlScreenSpecific.Controls.Add(Me.fbWallpaper)
@@ -313,10 +317,30 @@ Partial Class frmSettings
                     Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
         Me.FlatButton1.ButtonText = ""
         Me.FlatButton1.Color = LCARS.LCARScolorStyles.StaticTan
-        Me.FlatButton1.Location = New System.Drawing.Point(0, 116)
+        Me.FlatButton1.Location = New System.Drawing.Point(0, 155)
         Me.FlatButton1.Name = "FlatButton1"
-        Me.FlatButton1.Size = New System.Drawing.Size(102, 356)
+        Me.FlatButton1.Size = New System.Drawing.Size(102, 317)
         Me.FlatButton1.TabIndex = 3
+        '
+        'fbFolders
+        '
+        Me.fbFolders.ButtonText = "FOLDERS"
+        Me.fbFolders.Location = New System.Drawing.Point(0, 116)
+        Me.fbFolders.Name = "fbFolders"
+        Me.fbFolders.Size = New System.Drawing.Size(103, 33)
+        Me.fbFolders.TabIndex = 1
+        Me.fbFolders.Text = "FOLDERS"
+        '
+        'pnlFolders
+        '
+        Me.pnlFolders.Anchor = CType((((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
+                    Or System.Windows.Forms.AnchorStyles.Left) _
+                    Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.pnlFolders.Location = New System.Drawing.Point(112, 3)
+        Me.pnlFolders.Name = "pnlFolders"
+        Me.pnlFolders.Size = New System.Drawing.Size(547, 452)
+        Me.pnlFolders.TabIndex = 4
+        Me.pnlFolders.Visible = False
         '
         'pnlLanguage
         '
@@ -1751,6 +1775,7 @@ Partial Class frmSettings
         Me.pnlScreenSpecific.ResumeLayout(False)
         Me.pnlMainScreen.ResumeLayout(False)
         Me.pnlMainScreen.PerformLayout()
+        Me.pnlFolders.ResumeLayout(False)
         Me.pnlLanguage.ResumeLayout(False)
         Me.pnlLanguage.PerformLayout()
         Me.pnlWallpaper.ResumeLayout(False)
@@ -1794,7 +1819,7 @@ Partial Class frmSettings
     Friend WithEvents sbUseScheme As LCARS.Controls.StandardButton
     Friend WithEvents lstColors As LCARS.Controls.LCARSList
     Friend WithEvents Label3 As System.Windows.Forms.Label
-    Friend WithEvents sbExitMyComp As LCARS.Controls.StandardButton
+    Friend WithEvents sbExitMyComp As LCARS.Controls.FlatButton
     Friend WithEvents Label6 As System.Windows.Forms.Label
     Friend WithEvents fbShellSelect As LCARS.Controls.FlatButton
     Friend WithEvents hpbExplorer As LCARS.Controls.HalfPillButton
@@ -1878,6 +1903,8 @@ Partial Class frmSettings
     Friend WithEvents PictureBox2 As System.Windows.Forms.PictureBox
     Friend WithEvents sbDefault As LCARS.Controls.StandardButton
     Friend WithEvents FlatButton1 As LCARS.Controls.FlatButton
+    Friend WithEvents fbFolders As LCARS.Controls.FlatButton
+    Friend WithEvents pnlFolders As System.Windows.Forms.Panel
     Friend WithEvents fbBack As LCARS.Controls.FlatButton
     Friend WithEvents pnlMainScreen As System.Windows.Forms.Panel
     Friend WithEvents Label4 As System.Windows.Forms.Label

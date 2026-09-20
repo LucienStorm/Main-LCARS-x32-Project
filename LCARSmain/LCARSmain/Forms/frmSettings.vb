@@ -64,7 +64,7 @@ Public Class frmSettings
             tbTitle.Text = "Settings: System Offline"
         End If
 
-        Dim beeping As Boolean = Boolean.Parse(GetSetting("LCARS x32", "Application", "ButtonBeep", "False"))
+        Dim beeping As Boolean = LCARS.x32.modSettings.ButtonBeep
         Dim shellPath As String = ""
 
         lstSounds.DataSource = LCARSSound.sounds
@@ -219,6 +219,7 @@ Public Class frmSettings
             lstLanguages.Items.Add(System.IO.Path.GetFileNameWithoutExtension(myFile))
         Next
 
+        LCARS.SetBeeping(Me, beeping)
     End Sub
 
 
@@ -276,7 +277,80 @@ Public Class frmSettings
     End Sub
 
     Protected Overrides Sub OnShellChromeLayout()
-        PlaceShellAlignedCloseButton(sbExitMyComp)
+        ' Match the x32TabControl tab strip: FlatButton rectangles, same width/X as buttonPanel.
+        If sbExitMyComp Is Nothing OrElse ltcSettings Is Nothing OrElse ltcSettings.buttonPanel Is Nothing Then Return
+        Dim tabW As Integer = ltcSettings.buttonPanel.Width
+        If tabW < 1 Then tabW = 100
+        Dim tabH As Integer = 35
+        Dim panelLoc As Point = ltcSettings.PointToScreen(ltcSettings.buttonPanel.Location)
+        Dim colX As Integer = Me.PointToClient(panelLoc).X
+        Dim closeY As Integer = Math.Max(0, ClientSize.Height - ShellStartMenuTopFromWorkBottom)
+
+        ' Tab control fills to the form bottom; CLOSE sits in the strip with blank above and
+        ' the tan LCARS filler shortened so it only runs below CLOSE toward the bottom.
+        Const closeGapAbove As Integer = 16
+        Const closeGapBelow As Integer = 8
+        Const closeSideMargin As Integer = 4
+        Const formBottomPad As Integer = 4
+        ltcSettings.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Bottom
+        Dim settingsHeight As Integer = Math.Max(200, ClientSize.Height - ltcSettings.Top - formBottomPad)
+        If ltcSettings.Height <> settingsHeight Then
+            ltcSettings.Height = settingsHeight
+        End If
+        Dim settingsWidth As Integer = Math.Max(100, ClientSize.Width - ltcSettings.Left - closeSideMargin)
+        If ltcSettings.Width <> settingsWidth Then
+            ltcSettings.Width = settingsWidth
+        End If
+
+        ' Keep CLOSE below ABOUT with a blank spacer (black panel), not under the tan filler.
+        Dim lastTabBottomInPanel As Integer = 0
+        For Each c As Control In ltcSettings.buttonPanel.Controls
+            Dim fb As LCARS.Controls.FlatButton = TryCast(c, LCARS.Controls.FlatButton)
+            If fb Is Nothing Then Continue For
+            If fb.Tag IsNot Nothing Then
+                Dim bottom As Integer = fb.Top + fb.Height
+                If bottom > lastTabBottomInPanel Then lastTabBottomInPanel = bottom
+            End If
+        Next
+        Dim panelClientY As Integer = Me.PointToClient(panelLoc).Y
+        Dim minCloseY As Integer = panelClientY + lastTabBottomInPanel + closeGapAbove
+        If closeY < minCloseY Then closeY = minCloseY
+
+        sbExitMyComp.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        sbExitMyComp.Size = New Size(Math.Max(40, tabW - closeSideMargin), tabH)
+        sbExitMyComp.Location = New Point(colX, closeY)
+        sbExitMyComp.ButtonText = "CLOSE"
+        sbExitMyComp.Text = "CLOSE"
+        sbExitMyComp.ButtonTextAlign = ContentAlignment.BottomRight
+        sbExitMyComp.Color = LCARS.LCARScolorStyles.FunctionOffline
+        sbExitMyComp.Visible = True
+        sbExitMyComp.BringToFront()
+
+        ' Tan filler: only below CLOSE, shortened toward the bottom of the screen.
+        Dim filler As LCARS.Controls.FlatButton = Nothing
+        For Each c As Control In ltcSettings.buttonPanel.Controls
+            Dim fb As LCARS.Controls.FlatButton = TryCast(c, LCARS.Controls.FlatButton)
+            If fb Is Nothing Then Continue For
+            If Not fb.Clickable AndAlso fb.Tag Is Nothing Then
+                filler = fb
+                Exit For
+            End If
+        Next
+        If filler IsNot Nothing Then
+            Dim fillerTop As Integer = (closeY + tabH + closeGapBelow) - panelClientY
+            If fillerTop < lastTabBottomInPanel + closeGapAbove + tabH + closeGapBelow Then
+                fillerTop = lastTabBottomInPanel + closeGapAbove + tabH + closeGapBelow
+            End If
+            filler.Anchor = AnchorStyles.Left Or AnchorStyles.Top
+            filler.Left = 0
+            filler.Width = ltcSettings.buttonPanel.Width
+            filler.Top = Math.Max(0, fillerTop)
+            filler.Height = Math.Max(8, ltcSettings.buttonPanel.Height - filler.Top)
+            filler.Color = LCARS.LCARScolorStyles.StaticTan
+            filler.Clickable = False
+            filler.ButtonText = ""
+            filler.Text = ""
+        End If
     End Sub
 
     Private Sub sbDefault_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbDefault.Click
@@ -827,18 +901,22 @@ Public Class frmSettings
         pnlWallpaper.Visible = True
         pnlMainScreen.Visible = False
         pnlLanguage.Visible = False
+        pnlFolders.Visible = False
         fbWallpaper.RedAlert = LCARS.LCARSalert.White
         fbMainScreen.RedAlert = LCARS.LCARSalert.Normal
         fbLanguage.RedAlert = LCARS.LCARSalert.Normal
+        fbFolders.RedAlert = LCARS.LCARSalert.Normal
     End Sub
 
     Private Sub fbMainScreen_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles fbMainScreen.Click
         pnlWallpaper.Visible = False
         pnlMainScreen.Visible = True
         pnlLanguage.Visible = False
+        pnlFolders.Visible = False
         fbWallpaper.RedAlert = LCARS.LCARSalert.Normal
         fbMainScreen.RedAlert = LCARS.LCARSalert.White
         fbLanguage.RedAlert = LCARS.LCARSalert.Normal
+        fbFolders.RedAlert = LCARS.LCARSalert.Normal
         Dim selectedScreen As Integer = MainScreen(screenIndex)
     End Sub
 
@@ -846,10 +924,170 @@ Public Class frmSettings
         pnlWallpaper.Visible = False
         pnlMainScreen.Visible = False
         pnlLanguage.Visible = True
+        pnlFolders.Visible = False
         fbWallpaper.RedAlert = LCARS.LCARSalert.Normal
         fbMainScreen.RedAlert = LCARS.LCARSalert.Normal
         fbLanguage.RedAlert = LCARS.LCARSalert.White
+        fbFolders.RedAlert = LCARS.LCARSalert.Normal
     End Sub
+
+    Private Sub fbFolders_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles fbFolders.Click
+        EnsureFoldersPanelBuilt()
+        pnlWallpaper.Visible = False
+        pnlMainScreen.Visible = False
+        pnlLanguage.Visible = False
+        pnlFolders.Visible = True
+        fbWallpaper.RedAlert = LCARS.LCARSalert.Normal
+        fbMainScreen.RedAlert = LCARS.LCARSalert.Normal
+        fbLanguage.RedAlert = LCARS.LCARSalert.Normal
+        fbFolders.RedAlert = LCARS.LCARSalert.White
+        LoadFoldersPanel()
+    End Sub
+
+#Region " Folders remap "
+    Private foldersPanelBuilt As Boolean = False
+    Private txtDocName As TextBox
+    Private txtDocPath As TextBox
+    Private txtPicName As TextBox
+    Private txtPicPath As TextBox
+    Private txtMusicName As TextBox
+    Private txtMusicPath As TextBox
+    Private txtVidName As TextBox
+    Private txtVidPath As TextBox
+
+    Private Sub EnsureFoldersPanelBuilt()
+        If foldersPanelBuilt Then Return
+        foldersPanelBuilt = True
+        pnlFolders.BackColor = Color.Black
+        pnlFolders.Controls.Clear()
+
+        Dim y As Integer = 8
+        AddFolderRow("DOCUMENTS", y, txtDocName, txtDocPath, MediaFolderKind.Documents)
+        y += 70
+        AddFolderRow("PICTURES", y, txtPicName, txtPicPath, MediaFolderKind.Pictures)
+        y += 70
+        AddFolderRow("MUSIC", y, txtMusicName, txtMusicPath, MediaFolderKind.Music)
+        y += 70
+        AddFolderRow("VIDEOS", y, txtVidName, txtVidPath, MediaFolderKind.Videos)
+        y += 80
+
+        Dim fbSave As New LCARS.Controls.FlatButton()
+        fbSave.ButtonText = "SAVE"
+        fbSave.Text = "SAVE"
+        fbSave.Color = LCARS.LCARScolorStyles.PrimaryFunction
+        fbSave.Size = New Size(120, 28)
+        fbSave.Location = New Point(10, y)
+        AddHandler fbSave.Click, AddressOf fbFoldersSave_Click
+        pnlFolders.Controls.Add(fbSave)
+    End Sub
+
+    Private Sub AddFolderRow(ByVal title As String, ByVal y As Integer, ByRef nameBox As TextBox, ByRef pathBox As TextBox, ByVal kind As MediaFolderKind)
+        Dim lbl As New Label()
+        lbl.Text = title
+        lbl.ForeColor = Color.Orange
+        lbl.Font = New Font("LCARS", 14.0F)
+        lbl.AutoSize = True
+        lbl.Location = New Point(10, y)
+        pnlFolders.Controls.Add(lbl)
+
+        Dim lblName As New Label() With {.Text = "NAME", .ForeColor = Color.Orange, .Location = New Point(10, y + 24), .AutoSize = True}
+        nameBox = New TextBox() With {
+            .Location = New Point(70, y + 22),
+            .Size = New Size(140, 22),
+            .BackColor = Color.FromArgb(40, 40, 40),
+            .ForeColor = Color.White
+        }
+        Dim lblPath As New Label() With {.Text = "PATH", .ForeColor = Color.Orange, .Location = New Point(220, y + 24), .AutoSize = True}
+        pathBox = New TextBox() With {
+            .Location = New Point(270, y + 22),
+            .Size = New Size(160, 22),
+            .BackColor = Color.FromArgb(40, 40, 40),
+            .ForeColor = Color.White
+        }
+        Dim fbBrowse As New LCARS.Controls.FlatButton()
+        fbBrowse.ButtonText = "BROWSE"
+        fbBrowse.Text = "BROWSE"
+        fbBrowse.Size = New Size(70, 24)
+        fbBrowse.Location = New Point(440, y + 20)
+        fbBrowse.Tag = pathBox
+        AddHandler fbBrowse.Click, AddressOf fbFolderBrowse_Click
+
+        Dim fbReset As New LCARS.Controls.FlatButton()
+        fbReset.ButtonText = "RESET"
+        fbReset.Text = "RESET"
+        fbReset.Size = New Size(60, 24)
+        fbReset.Location = New Point(515, y + 20)
+        fbReset.Color = LCARS.LCARScolorStyles.NavigationFunction
+        fbReset.Tag = kind
+        AddHandler fbReset.Click, AddressOf fbFolderReset_Click
+
+        pnlFolders.Controls.Add(lblName)
+        pnlFolders.Controls.Add(nameBox)
+        pnlFolders.Controls.Add(lblPath)
+        pnlFolders.Controls.Add(pathBox)
+        pnlFolders.Controls.Add(fbBrowse)
+        pnlFolders.Controls.Add(fbReset)
+    End Sub
+
+    Private Sub LoadFoldersPanel()
+        EnsureFoldersPanelBuilt()
+        txtDocName.Text = GetMediaFolderLabel(MediaFolderKind.Documents)
+        txtDocPath.Text = GetSetting("LCARS x32", "Application", "DocumentsPath", "")
+        txtPicName.Text = GetMediaFolderLabel(MediaFolderKind.Pictures)
+        txtPicPath.Text = GetSetting("LCARS x32", "Application", "PicturesPath", "")
+        txtMusicName.Text = GetMediaFolderLabel(MediaFolderKind.Music)
+        txtMusicPath.Text = GetSetting("LCARS x32", "Application", "MusicPath", "")
+        txtVidName.Text = GetMediaFolderLabel(MediaFolderKind.Videos)
+        Dim vidPath As String = GetSetting("LCARS x32", "Application", "VideosPath", "")
+        If vidPath = "" Then vidPath = GetSetting("LCARS x32", "Application", "Videos", "")
+        txtVidPath.Text = vidPath
+    End Sub
+
+    Private Sub fbFoldersSave_Click(ByVal sender As Object, ByVal e As EventArgs)
+        SetMediaFolderLabel(MediaFolderKind.Documents, txtDocName.Text)
+        SetMediaFolderPath(MediaFolderKind.Documents, txtDocPath.Text)
+        SetMediaFolderLabel(MediaFolderKind.Pictures, txtPicName.Text)
+        SetMediaFolderPath(MediaFolderKind.Pictures, txtPicPath.Text)
+        SetMediaFolderLabel(MediaFolderKind.Music, txtMusicName.Text)
+        SetMediaFolderPath(MediaFolderKind.Music, txtMusicPath.Text)
+        SetMediaFolderLabel(MediaFolderKind.Videos, txtVidName.Text)
+        SetMediaFolderPath(MediaFolderKind.Videos, txtVidPath.Text)
+        For Each b As modBusiness In curBusiness
+            If b IsNot Nothing AndAlso b.myForm IsNot Nothing Then
+                ApplyMediaFolderLabels(b.myForm)
+            End If
+        Next
+        LCARS.UI.MsgBox("Folder settings saved.", MsgBoxStyle.OkOnly, "FOLDERS")
+    End Sub
+
+    Private Sub fbFolderBrowse_Click(ByVal sender As Object, ByVal e As EventArgs)
+        Dim pathBox As TextBox = TryCast(TryCast(sender, Control).Tag, TextBox)
+        If pathBox Is Nothing Then Return
+        Using dlg As New FolderBrowserDialog()
+            If Not String.IsNullOrWhiteSpace(pathBox.Text) Then
+                Try
+                    dlg.SelectedPath = pathBox.Text
+                Catch
+                End Try
+            End If
+            If dlg.ShowDialog(Me) = DialogResult.OK Then pathBox.Text = dlg.SelectedPath
+        End Using
+    End Sub
+
+    Private Sub fbFolderReset_Click(ByVal sender As Object, ByVal e As EventArgs)
+        Dim kindObj As Object = TryCast(sender, Control).Tag
+        If kindObj Is Nothing OrElse Not TypeOf kindObj Is MediaFolderKind Then Return
+        Dim kind As MediaFolderKind = CType(kindObj, MediaFolderKind)
+        ResetMediaFolder(kind)
+        LoadFoldersPanel()
+        For Each b As modBusiness In curBusiness
+            If b IsNot Nothing AndAlso b.myForm IsNot Nothing Then
+                b.loadLanguage()
+            End If
+        Next
+    End Sub
+#End Region
+
 #Region " Sounds "
     Dim soundEditing As Boolean = False
     Dim soundLoading As Boolean = False
