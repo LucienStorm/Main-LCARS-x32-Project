@@ -312,25 +312,7 @@ Module modCommon
 
 #Region " Get My Videos folder "
     Public Function GetMyVideosPath() As String
-        Dim result As String = GetSetting("LCARS x32", "Application", "Videos", "")
-        If result = "" Then
-            Try
-                Dim myReg As Microsoft.Win32.RegistryKey = Microsoft.Win32.Registry.CurrentUser
-                myReg = myReg.OpenSubKey("Software\Microsoft\Windows\CurrentVersion\explorer\Shell Folders\", False)
-                result = myReg.GetValue("My Video")
-                SaveSetting("LCARS x32", "Application", "Videos", result)
-            Catch ex As Exception
-            End Try
-            If result = "" Then
-                Dim res As DialogResult = MsgBox("Unable to find ""My Videos"". Would you like to manually set the path?", MsgBoxStyle.YesNo)
-                If res = DialogResult.Yes Then
-                    result = InputBox("Input the complete path to your ""My Videos"" directory:", "Input My Videos directory")
-                    SaveSetting("LCARS x32", "Application", "Videos", result)
-                End If
-            End If
-        End If
-
-        Return result
+        Return GetMediaFolderPath(MediaFolderKind.Videos)
     End Function
 #End Region
 
