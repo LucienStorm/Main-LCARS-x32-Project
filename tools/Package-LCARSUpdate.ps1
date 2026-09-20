@@ -126,7 +126,9 @@ foreach ($name in $deployFiles) {
     Write-Host ("{0}  {1}" -f $hash, $name)
 }
 
-# Ship LibVLC as ONE Extract zip (not hundreds of File entries — that crashes LCARSUpdate UI).
+# Ship LibVLC as ONE zip File (not hundreds of plugin File entries — that crashes LCARSUpdate UI).
+# Class must be File (not Extract): Extract never left the archive on disk, so MD5 checks
+# re-queued lib-vlc.zip forever. Installer copies the zip then extracts it in place.
 $vlcInstall = Join-Path $installDir "lib\vlc"
 $vlcZipName = "lib-vlc.zip"
 if (Test-Path $vlcInstall) {
@@ -144,8 +146,8 @@ if (Test-Path $vlcInstall) {
     $lines.Add($ComponentVersion)
     $lines.Add("$downloadBase$vlcZipName")
     $lines.Add($hash)
-    $lines.Add("Extract")
-    Write-Host ("{0}  {1} (Extract)" -f $hash, $vlcZipName)
+    $lines.Add("File")
+    Write-Host ("{0}  {1} (File + install-time extract)" -f $hash, $vlcZipName)
     Write-Host "Packaged LibVLC tree as single zip from $vlcInstall"
 } else {
     Write-Warning "LibVLC tree missing at $vlcInstall - LCARSmedia audio/video will not play until natives are present."

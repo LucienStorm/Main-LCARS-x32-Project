@@ -267,24 +267,28 @@ Public Class frmUpdate
     End Function
 
     ''' <summary>
-    ''' Extract packages: skip when zip MD5 matches, or versions.txt matches and extracted payload is present.
+    ''' Extract packages: skip when zip MD5 matches, or payload is present at this version.
+    ''' Also stop the loop when libvlc.dll is already on disk for the same component version
+    ''' even if the zip was never kept (0.7.2.202 Extract-class behavior).
     ''' </summary>
     Private Function ExtractNeedsUpdate(ByVal entry As component, ByVal localVersions As ProgramVersions) As Boolean
-        ' Prefer zip MD5 when the installer left the archive in the install folder.
         Dim zipPath As String = System.IO.Path.Combine(Application.StartupPath, entry.name)
         If System.IO.File.Exists(zipPath) Then
             Dim actual As String = ComputeFileMd5(zipPath)
             If Not String.IsNullOrEmpty(actual) AndAlso String.Equals(actual, entry.md5, StringComparison.OrdinalIgnoreCase) Then
                 Return False
             End If
+            ' Zip present but wrong hash — real upgrade.
+            Return True
         End If
-        If String.Equals(localVersions.getVersion(entry.name), entry.version, StringComparison.OrdinalIgnoreCase) Then
-            If String.Equals(entry.name, "lib-vlc.zip", StringComparison.OrdinalIgnoreCase) Then
-                Dim marker As String = System.IO.Path.Combine(Application.StartupPath, "lib\vlc\libvlc.dll")
-                If System.IO.File.Exists(marker) Then Return False
-            Else
-                Return False
-            End If
+
+        Dim recorded As String = localVersions.getVersion(entry.name)
+        Dim marker As String = System.IO.Path.Combine(Application.StartupPath, "lib\vlc\libvlc.dll")
+        Dim isVlcZip As Boolean = String.Equals(entry.name, "lib-vlc.zip", StringComparison.OrdinalIgnoreCase)
+        Dim markerOk As Boolean = (Not isVlcZip) OrElse System.IO.File.Exists(marker)
+
+        If markerOk AndAlso String.Equals(recorded, entry.version, StringComparison.OrdinalIgnoreCase) Then
+            Return False
         End If
         Return True
     End Function

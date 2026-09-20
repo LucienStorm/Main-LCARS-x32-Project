@@ -1109,6 +1109,25 @@ Public Class Installing
     End Function
 
     ''' <summary>
+    ''' Unpack a runtime zip (e.g. lib-vlc.zip) into the install folder. The zip file itself stays on disk for MD5 skip checks.
+    ''' </summary>
+    Private Function ExtractZipIntoInstall(ByVal zipPath As String, ByVal installPath As String) As Boolean
+        Try
+            RaiseEvent DisplayMessage("Extracting " & System.IO.Path.GetFileName(zipPath))
+            Using zip As Ionic.Zip.ZipFile = Ionic.Zip.ZipFile.Read(zipPath)
+                zip.ExtractAll(installPath, Ionic.Zip.ExtractExistingFileAction.OverwriteSilently)
+            End Using
+            WriteInstallLog("Extracted zip into install folder: " & zipPath)
+            Return True
+        Catch ex As Exception
+            failed = True
+            lastInstallError = "Zip extract failed for " & zipPath & vbNewLine & ex.ToString()
+            WriteInstallCrashLog(lastInstallError)
+            Return False
+        End Try
+    End Function
+
+    ''' <summary>
     ''' After the main copy loop: kill OSK + LCARSmain, wait for exit, then force-replace
     ''' OnScreenKeyboard.exe with rename-aside + MD5 verify and many retries.
     ''' </summary>
@@ -1286,6 +1305,14 @@ Public Class Installing
                     Else
                         localVersions.UpdateVersion(myComponent.name, myComponent.version)
                         localVersions.SaveFile()
+                        ' lib-vlc.zip (and any future runtime zips): keep the archive for MD5 skip checks, unpack payload.
+                        If myComponent.name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) Then
+                            If Not ExtractZipIntoInstall(targetFile, path) Then
+                                failed = True
+                                fileCopyFailed = True
+                                RaiseEvent DisplayMessage("Extracting failed: " & myComponent.name)
+                            End If
+                        End If
                     End If
                 Catch ex As Exception
                     failed = True
