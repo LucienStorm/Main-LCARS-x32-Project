@@ -72,6 +72,7 @@ public Class modBusiness
     Public myRun As LCARSbuttonClass
     Public myAlertListButton As LCARSbuttonClass
     Public myDesktopFiles As LCARSbuttonClass
+    Public myNetworkPlaces As LCARSbuttonClass
 
     'Public state
     'TODO: Find a better way to handle this
@@ -360,36 +361,51 @@ public Class modBusiness
     End Sub
 
     Public Sub myDocuments_Click(ByVal sender As Object, ByVal e As System.EventArgs)
-        Dim myProcess As New Process()
-        myProcess.StartInfo.FileName = Application.StartupPath & "\LCARSexplorer.exe"
-        myProcess.StartInfo.Arguments = System.Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-        launchProcessOnScreen(myProcess)
+        LaunchMediaExplorer(MediaFolderKind.Documents)
     End Sub
 
     Public Sub myPictures_Click(ByVal sender As Object, ByVal e As System.EventArgs)
-        Dim myProcess As New Process()
-        myProcess.StartInfo.FileName = Application.StartupPath & "\LCARSexplorer.exe"
-        myProcess.StartInfo.Arguments = System.Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)
-        launchProcessOnScreen(myProcess)
+        LaunchMediaExplorer(MediaFolderKind.Pictures)
     End Sub
+
     Public Sub myVideos_Click(ByVal sender As Object, ByVal e As System.EventArgs)
-        Dim myProcess As New Process()
-        myProcess.StartInfo.FileName = Application.StartupPath & "\LCARSexplorer.exe"
-        myProcess.StartInfo.Arguments = GetMyVideosPath()
-        launchProcessOnScreen(myProcess)
+        LaunchMediaExplorer(MediaFolderKind.Videos)
     End Sub
 
     Public Sub myDesktopFiles_Click(ByVal sender As Object, ByVal e As EventArgs)
         Dim myProcess As New Process()
         myProcess.StartInfo.FileName = Application.StartupPath & "\LCARSexplorer.exe"
-        myProcess.StartInfo.Arguments = System.Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        myProcess.StartInfo.Arguments = """" & System.Environment.GetFolderPath(Environment.SpecialFolder.Desktop) & """"
         launchProcessOnScreen(myProcess)
     End Sub
 
     Public Sub myMusic_Click(ByVal sender As Object, ByVal e As System.EventArgs)
+        LaunchMediaExplorer(MediaFolderKind.Music)
+    End Sub
+
+    Public Sub myNetworkPlaces_Click(ByVal sender As Object, ByVal e As System.EventArgs)
         Dim myProcess As New Process()
         myProcess.StartInfo.FileName = Application.StartupPath & "\LCARSexplorer.exe"
-        myProcess.StartInfo.Arguments = System.Environment.GetFolderPath(Environment.SpecialFolder.MyMusic)
+        myProcess.StartInfo.Arguments = "NETWORK:"
+        launchProcessOnScreen(myProcess)
+    End Sub
+
+    Private Sub LaunchMediaExplorer(ByVal kind As MediaFolderKind)
+        Dim path As String = GetMediaFolderPath(kind)
+        If String.IsNullOrWhiteSpace(path) Then
+            LCARS.UI.MsgBox("No folder path is set for this button. Set it in Settings → SCREEN-SPECIFIC → Folders.", MsgBoxStyle.OkOnly, "ERROR:")
+            Return
+        End If
+        If Not Directory.Exists(path) Then
+            ' UNC may fail Exists when offline — still attempt launch; explorer/auth handles denial.
+            If Not path.StartsWith("\\") Then
+                LCARS.UI.MsgBox("Folder not found:" & vbCrLf & path, MsgBoxStyle.OkOnly, "ERROR:")
+                Return
+            End If
+        End If
+        Dim myProcess As New Process()
+        myProcess.StartInfo.FileName = Application.StartupPath & "\LCARSexplorer.exe"
+        myProcess.StartInfo.Arguments = """" & path & """"
         launchProcessOnScreen(myProcess)
     End Sub
 
@@ -1101,6 +1117,7 @@ public Class modBusiness
         tryAssocButton("myRun", myRun, AddressOf myRun_Click)
         tryAssocButton("myAlertListButton", myAlertListButton, AddressOf myAlertListButton_Click)
         tryAssocButton("fbDesktop", myDesktopFiles, AddressOf myDesktopFiles_Click)
+        tryAssocButton("fbMyNetwork", myNetworkPlaces, AddressOf myNetworkPlaces_Click)
 
         'Final setup
         loadLanguage()
@@ -1146,6 +1163,7 @@ public Class modBusiness
             FileClose(1)
         End Try
 
+        ApplyMediaFolderLabels(myForm)
     End Sub
 
 #Region " Tray Icon Handling "
