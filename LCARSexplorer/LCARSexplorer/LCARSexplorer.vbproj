@@ -142,6 +142,11 @@
     <Compile Include="HashSet.vb" />
     <Compile Include="KnownFolderPaths.vb" />
     <Compile Include="modCommon.vb" />
+    <Compile Include="NetworkPlacesRoot.vb" />
+    <Compile Include="SmbShareEnumerator.vb" />
+    <Compile Include="NetworkCredentialStore.vb" />
+    <Compile Include="NetworkAccess.vb" />
+    <Compile Include="frmNetworkCredentials.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>

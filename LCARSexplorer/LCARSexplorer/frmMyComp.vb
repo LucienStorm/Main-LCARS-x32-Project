@@ -1,4 +1,5 @@
 Imports System.IO
+Imports System.Collections.Generic
 Imports LCARS.UI
 Imports LCARS.LightweightControls
 
@@ -28,6 +29,8 @@ Public Class frmMyComp
     Dim mySelection As New frmSelect()
     Dim selectTime As TimeSpan = TimeSpan.FromMilliseconds(500)
     Dim WithEvents clipListener As New ClipboardListener(Me)
+    Dim networkScanBusy As Boolean = False
+    Dim cachedSmbHosts As New List(Of SmbDiscoveredHost)()
 
 #End Region
 
@@ -237,8 +240,13 @@ Public Class frmMyComp
     Private Sub frmMyComp_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
         My.Settings.TryUpgrade()
         If Command() <> "" Then
-            If Directory.Exists(Command) Then
-                curPath = Command()
+            Dim arg As String = Command().Trim().Trim(""""c)
+            If NetworkPlacesRoot.IsNetworkRoot(arg) Then
+                curPath = NetworkPlacesRoot.NetworkRootToken
+            ElseIf arg <> "" AndAlso Directory.Exists(arg) Then
+                curPath = arg
+            ElseIf arg.StartsWith("\\") Then
+                curPath = arg
             End If
         End If
         Clipboard_Changed(Me, EventArgs.Empty)
@@ -249,7 +257,23 @@ Public Class frmMyComp
     End Sub
 
     Protected Overrides Sub OnShellChromeLayout()
-        PlaceShellAlignedCloseButton(sbClose)
+        ' Keep CLOSE on the lower-right Actions column: same shape/size as GO TO / REFRESH, not the shell pill.
+        If sbClose Is Nothing Then Return
+        Dim actionsX As Integer = If(sbGoTo IsNot Nothing, sbGoTo.Left, 533)
+        Dim btnW As Integer = If(sbGoTo IsNot Nothing, sbGoTo.Width, 87)
+        Dim btnH As Integer = If(sbGoTo IsNot Nothing, sbGoTo.Height, 26)
+        sbClose.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
+        sbClose.Size = New Size(btnW, btnH)
+        sbClose.ButtonTextAlign = ContentAlignment.BottomRight
+        sbClose.ButtonTextHeight = 14
+        sbClose.Color = LCARS.LCARScolorStyles.FunctionOffline
+        sbClose.ButtonText = "CLOSE"
+        sbClose.Text = "CLOSE"
+        Dim y As Integer = ClientSize.Height - 78
+        If y < 0 Then y = 0
+        sbClose.Location = New Point(actionsX, y)
+        sbClose.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        sbClose.BringToFront()
     End Sub
 
     Private Sub loadMyComp()
@@ -313,104 +337,311 @@ Public Class frmMyComp
     Public Sub loadDir(ByVal newpath As String)
         If newpath = "" Then
             loadMyComp()
+            Return
+        End If
+        If NetworkPlacesRoot.IsNetworkRoot(newpath) Then
+            loadNetworkPlaces()
+            Return
+        End If
+        If IsHostOnlyUnc(newpath) Then
+            loadHostShares(newpath.TrimStart("\"c))
+            Return
+        End If
+
+        Dim infos() As FileSystemInfo = Nothing
+        If Not NetworkAccess.TryGetFileSystemInfos(newpath, Me, infos) Then
+            Return
+        End If
+
+        curPath = newpath
+        sbUpDir.Lit = True
+        pnlVisible.Visible = True
+
+        Dim title As String = Path.GetFileNameWithoutExtension(curPath)
+        If title <> "" Then
+            gridMyComp.Text = title
         Else
-            Dim myDir As DirectoryInfo = New DirectoryInfo(newpath)
-            Dim infos() As FileSystemInfo
-            Try
-                infos = myDir.GetFileSystemInfos()
-            Catch ex As Exception
-                MsgBox(String.Format("Unable to access path: {0}", newpath), MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "Access Denied")
-                Return
-            End Try
+            gridMyComp.Text = newpath
+        End If
 
-            curPath = newpath
-            sbUpDir.Lit = True
-            pnlVisible.Visible = True
-
-            Dim title As String = Path.GetFileNameWithoutExtension(curPath)
-            If title <> "" Then
-                gridMyComp.Text = title
-            Else
-                gridMyComp.Text = newpath
+        gridMyComp.Clear()
+        gridMyComp.ControlSize = New Size(300, 30)
+        Dim beeping As Boolean = LCARS.x32.modSettings.ButtonBeep
+        For Each curItem As FileSystemInfo In infos
+            Dim fileAttr As FileAttributes = curItem.Attributes
+            Dim hidden As Boolean = FileHasFlag(fileAttr, FileAttributes.Hidden)
+            Dim system As Boolean = FileHasFlag(fileAttr, FileAttributes.System)
+            Dim directory As Boolean = FileHasFlag(fileAttr, FileAttributes.Directory)
+            Dim reparsePoint As Boolean = FileHasFlag(fileAttr, FileAttributes.ReparsePoint)
+            Dim canStat As Boolean = True
+            Dim subDirs() As FileSystemInfo = Nothing
+            If directory And Not reparsePoint Then
+                Try
+                    subDirs = DirectCast(curItem, DirectoryInfo).GetDirectories()
+                Catch ex As Exception
+                    canStat = False
+                End Try
+            End If
+            If hidden And Not My.Settings.showHidden Or _
+                system And Not My.Settings.showSystem Or _
+                reparsePoint And Not My.Settings.showReparse Or _
+                My.Settings.check And Not canStat Then
+                Continue For
             End If
 
-            gridMyComp.Clear()
-            gridMyComp.ControlSize = New Size(300, 30)
-            Dim beeping As Boolean = LCARS.x32.modSettings.ButtonBeep
-            For Each curItem As FileSystemInfo In infos
-                Dim fileAttr As FileAttributes = curItem.Attributes
-                Dim hidden As Boolean = FileHasFlag(fileAttr, FileAttributes.Hidden)
-                Dim system As Boolean = FileHasFlag(fileAttr, FileAttributes.System)
-                Dim directory As Boolean = FileHasFlag(fileAttr, FileAttributes.Directory)
-                Dim reparsePoint As Boolean = FileHasFlag(fileAttr, FileAttributes.ReparsePoint)
-                Dim canStat As Boolean = True
-                Dim subDirs() As FileSystemInfo = Nothing
-                If directory And Not reparsePoint Then
-                    Try
-                        subDirs = DirectCast(curItem, DirectoryInfo).GetDirectories()
-                    Catch ex As Exception
-                        canStat = False
-                    End Try
+            Dim myButton As New LCComplexButton()
+
+            myButton.HoldDraw = True
+            myButton.Text = curItem.Name
+            myButton.Data = curItem.FullName
+            myButton.Beeping = beeping
+            myButton.HoldDraw = False
+            If My.Settings.dimHidden Then myButton.Lit = Not hidden
+
+            AddHandler myButton.MouseDown, AddressOf item_MouseDown
+            AddHandler myButton.MouseMove, AddressOf item_MouseMove
+            AddHandler myButton.Click, AddressOf item_Click
+
+            If reparsePoint Then
+                myButton.Color = LCARS.LCARScolorStyles.FunctionUnavailable
+                myButton.SideText = "--"
+                associateClickHandler(myButton, AddressOf reparsePoint_Click)
+            ElseIf directory Then
+                If canStat Then
+                    Dim curDir As DirectoryInfo = CType(curItem, DirectoryInfo)
+                    myButton.Color = LCARS.LCARScolorStyles.NavigationFunction
+                    myButton.SideText = subDirs.Length & "." & curDir.GetFiles().Length
+                    associateClickHandler(myButton, AddressOf directory_click)
+                Else
+                    myButton.SideText = "--"
+                    myButton.Color = LCARS.LCARScolorStyles.FunctionOffline
+                    associateClickHandler(myButton, AddressOf myErrorAlert)
                 End If
-                If hidden And Not My.Settings.showHidden Or _
-                    system And Not My.Settings.showSystem Or _
-                    reparsePoint And Not My.Settings.showReparse Or _
-                    My.Settings.check And Not canStat Then
-                    Continue For
+            Else
+                If My.Settings.ColorFiles Then
+                    Dim mycolors() As String = myButton.ColorsAvailable.getColors
+                    mycolors(LCARS.LCARScolorStyles.MiscFunction) = getExtColor(Path.GetExtension(curItem.Name))
+                    myButton.ColorsAvailable.setColors(mycolors)
                 End If
 
+                myButton.Color = LCARS.LCARScolorStyles.MiscFunction
+                Dim ext As String = Path.GetExtension(curItem.FullName).Replace(".", "")
+                If ext <> "" Then
+                    If ext.Length > 6 Then
+                        ext = ext.Substring(0, 6) & "."
+                    End If
+                    myButton.SideText = ext.ToUpper
+                Else
+                    myButton.SideText = "---"
+                End If
+                associateClickHandler(myButton, AddressOf myFile_Click)
+            End If
+
+            gridMyComp.Add(myButton)
+        Next
+    End Sub
+
+    Private Function IsHostOnlyUnc(ByVal path As String) As Boolean
+        If (String.IsNullOrEmpty(path) OrElse path.Trim().Length = 0) OrElse Not path.StartsWith("\\") Then Return False
+        Dim rest As String = path.TrimStart("\"c)
+        Return rest.Length > 0 AndAlso rest.IndexOf("\"c) < 0
+    End Function
+
+    Private Sub loadNetworkPlaces()
+        curPath = NetworkPlacesRoot.NetworkRootToken
+        gridMyComp.Clear()
+        gridMyComp.ControlSize = New Size((gridMyComp.Width - 38) \ 2, 30)
+        gridMyComp.Text = "NETWORK PLACES"
+        sbUpDir.Lit = False
+        pnlVisible.Visible = False
+        pnlEdit.Visible = False
+
+        Dim beeping As Boolean = LCARS.x32.modSettings.ButtonBeep
+
+        Dim hdrMapped As New LCComplexButton()
+        hdrMapped.HoldDraw = True
+        hdrMapped.Text = "MAPPED NETWORK DRIVES"
+        hdrMapped.SideText = "---"
+        hdrMapped.Color = LCARS.LCARScolorStyles.StaticTan
+        hdrMapped.Clickable = False
+        hdrMapped.HoldDraw = False
+        gridMyComp.Add(hdrMapped)
+
+        Dim drives As List(Of DriveInfo) = NetworkPlacesRoot.GetMappedNetworkDrives()
+        If drives.Count = 0 Then
+            Dim emptyDrv As New LCComplexButton()
+            emptyDrv.HoldDraw = True
+            emptyDrv.Text = "(none found)"
+            emptyDrv.SideText = "--"
+            emptyDrv.Color = LCARS.LCARScolorStyles.FunctionUnavailable
+            emptyDrv.Clickable = False
+            emptyDrv.HoldDraw = False
+            gridMyComp.Add(emptyDrv)
+        Else
+            For Each myDrive As DriveInfo In drives
                 Dim myButton As New LCComplexButton()
-
                 myButton.HoldDraw = True
-                myButton.Text = curItem.Name
-                myButton.Data = curItem.FullName
+                myButton.Data = myDrive.RootDirectory.FullName()
                 myButton.Beeping = beeping
                 myButton.HoldDraw = False
-                If My.Settings.dimHidden Then myButton.Lit = Not hidden
-
                 AddHandler myButton.MouseDown, AddressOf item_MouseDown
                 AddHandler myButton.MouseMove, AddressOf item_MouseMove
                 AddHandler myButton.Click, AddressOf item_Click
-
-                If reparsePoint Then
-                    myButton.Color = LCARS.LCARScolorStyles.FunctionUnavailable
-                    myButton.SideText = "--"
-                    associateClickHandler(myButton, AddressOf reparsePoint_Click)
-                ElseIf directory Then
-                    If canStat Then
-                        Dim curDir As DirectoryInfo = CType(curItem, DirectoryInfo)
-                        myButton.Color = LCARS.LCARScolorStyles.NavigationFunction
-                        myButton.SideText = subDirs.Length & "." & curDir.GetFiles().Length
-                        associateClickHandler(myButton, AddressOf directory_click)
+                If myDrive.IsReady Then
+                    myButton.Color = LCARS.LCARScolorStyles.NavigationFunction
+                    If myDrive.VolumeLabel = "" Then
+                        myButton.Text = "Network Drive (" & myDrive.Name & ")"
                     Else
+                        myButton.Text = myDrive.VolumeLabel & " (" & myDrive.Name & ")"
+                    End If
+                    Try
+                        myButton.SideText = ToDriveSize(myDrive.TotalSize)
+                    Catch
                         myButton.SideText = "--"
-                        myButton.Color = LCARS.LCARScolorStyles.FunctionOffline
-                        associateClickHandler(myButton, AddressOf myErrorAlert)
-                    End If
+                    End Try
+                    associateClickHandler(myButton, AddressOf directory_click)
                 Else
-                    If My.Settings.ColorFiles Then
-                        Dim mycolors() As String = myButton.ColorsAvailable.getColors
-                        mycolors(LCARS.LCARScolorStyles.MiscFunction) = getExtColor(Path.GetExtension(curItem.Name))
-                        myButton.ColorsAvailable.setColors(mycolors)
-                    End If
-
-                    myButton.Color = LCARS.LCARScolorStyles.MiscFunction
-                    Dim ext As String = Path.GetExtension(curItem.FullName).Replace(".", "")
-                    If ext <> "" Then
-                        If ext.Length > 6 Then
-                            ext = ext.Substring(0, 6) & "."
-                        End If
-                        myButton.SideText = ext.ToUpper
-                    Else
-                        myButton.SideText = "---"
-                    End If
-                    associateClickHandler(myButton, AddressOf myFile_Click)
+                    myButton.Color = LCARS.LCARScolorStyles.FunctionUnavailable
+                    myButton.Text = "DRIVE OFFLINE (" & myDrive.Name & ")"
+                    myButton.SideText = "--"
+                    associateClickHandler(myButton, AddressOf offlineDrive_Click)
                 End If
-
                 gridMyComp.Add(myButton)
             Next
         End If
+
+        Dim hdrLan As New LCComplexButton()
+        hdrLan.HoldDraw = True
+        hdrLan.Text = "ON THIS NETWORK"
+        hdrLan.SideText = "SCAN"
+        hdrLan.Color = LCARS.LCARScolorStyles.PrimaryFunction
+        hdrLan.Beeping = beeping
+        hdrLan.HoldDraw = False
+        AddHandler hdrLan.Click, AddressOf networkScanHeader_Click
+        gridMyComp.Add(hdrLan)
+
+        If cachedSmbHosts.Count = 0 Then
+            Dim emptyHost As New LCComplexButton()
+            emptyHost.HoldDraw = True
+            emptyHost.Text = "(none found — tap SCAN above)"
+            emptyHost.SideText = "--"
+            emptyHost.Color = LCARS.LCARScolorStyles.FunctionUnavailable
+            emptyHost.Clickable = False
+            emptyHost.HoldDraw = False
+            gridMyComp.Add(emptyHost)
+        Else
+            For Each host As SmbDiscoveredHost In cachedSmbHosts
+                Dim hostBtn As New LCComplexButton()
+                hostBtn.HoldDraw = True
+                hostBtn.Text = host.DisplayText()
+                hostBtn.Data = "\\" & If((String.IsNullOrEmpty(host.Hostname) OrElse host.Hostname.Trim().Length = 0), host.IpAddress, host.Hostname)
+                hostBtn.SideText = "SMB"
+                hostBtn.Color = LCARS.LCARScolorStyles.NavigationFunction
+                hostBtn.Beeping = beeping
+                hostBtn.HoldDraw = False
+                AddHandler hostBtn.MouseDown, AddressOf item_MouseDown
+                AddHandler hostBtn.MouseMove, AddressOf item_MouseMove
+                AddHandler hostBtn.Click, AddressOf item_Click
+                associateClickHandler(hostBtn, AddressOf networkHost_Click)
+                gridMyComp.Add(hostBtn)
+            Next
+        End If
     End Sub
+
+    Private Sub networkScanHeader_Click(ByVal sender As Object, ByVal e As EventArgs)
+        BeginNetworkScan()
+    End Sub
+
+    Private Sub networkHost_Click(ByVal sender As Object, ByVal e As EventArgs)
+        If cancelClick Then Return
+        Dim data As String = CStr(DirectCast(sender, LCComplexButton).Data)
+        loadDir(data)
+    End Sub
+
+    Private Sub BeginNetworkScan()
+        If networkScanBusy Then Return
+        networkScanBusy = True
+        gridMyComp.Text = "NETWORK PLACES (SCANNING…)"
+        Dim bw As New System.ComponentModel.BackgroundWorker()
+        AddHandler bw.DoWork, Sub(s, args) args.Result = NetworkPlacesRoot.ScanSmbHosts(350)
+        AddHandler bw.RunWorkerCompleted,
+            Sub(s, args)
+                networkScanBusy = False
+                If args.Error IsNot Nothing Then
+                    MsgBox("Network scan failed: " & args.Error.Message, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "SCAN")
+                Else
+                    cachedSmbHosts = CType(args.Result, List(Of SmbDiscoveredHost))
+                End If
+                If NetworkPlacesRoot.IsNetworkRoot(curPath) Then
+                    loadNetworkPlaces()
+                End If
+            End Sub
+        bw.RunWorkerAsync()
+    End Sub
+
+    Private Sub loadHostShares(ByVal host As String)
+        Dim hostClean As String = host.Trim().TrimStart("\"c)
+        Dim slash As Integer = hostClean.IndexOf("\"c)
+        If slash > 0 Then hostClean = hostClean.Substring(0, slash)
+
+        curPath = "\\" & hostClean
+        sbUpDir.Lit = True
+        pnlVisible.Visible = False
+        pnlEdit.Visible = False
+        gridMyComp.Clear()
+        gridMyComp.ControlSize = New Size((gridMyComp.Width - 38) \ 2, 30)
+        gridMyComp.Text = "SHARES: " & hostClean
+
+        Dim shares As List(Of String) = Nothing
+        Try
+            shares = SmbShareEnumerator.ListShares(hostClean)
+        Catch ex As Exception
+            If NetworkAccess.IsUnauthorizedOrNetworkError(ex) Then
+                Dim infos() As FileSystemInfo = Nothing
+                ' Force cred prompt path via a dummy share open attempt
+                Dim dummy As String = "\\" & hostClean & "\IPC$"
+                NetworkAccess.TryGetFileSystemInfos(dummy, Me, infos)
+                Try
+                    shares = SmbShareEnumerator.ListShares(hostClean)
+                Catch
+                    shares = New List(Of String)()
+                End Try
+            Else
+                MsgBox("Unable to list shares on " & hostClean & vbCrLf & ex.Message, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "SHARES")
+                shares = New List(Of String)()
+            End If
+        End Try
+
+        Dim beeping As Boolean = LCARS.x32.modSettings.ButtonBeep
+        If shares Is Nothing OrElse shares.Count = 0 Then
+            Dim empty As New LCComplexButton()
+            empty.HoldDraw = True
+            empty.Text = "(no shares found)"
+            empty.SideText = "--"
+            empty.Color = LCARS.LCARScolorStyles.FunctionUnavailable
+            empty.Clickable = False
+            empty.HoldDraw = False
+            gridMyComp.Add(empty)
+            Return
+        End If
+
+        For Each shareName As String In shares
+            Dim myButton As New LCComplexButton()
+            myButton.HoldDraw = True
+            myButton.Text = shareName
+            myButton.Data = "\\" & hostClean & "\" & shareName
+            myButton.SideText = "SHARE"
+            myButton.Color = LCARS.LCARScolorStyles.NavigationFunction
+            myButton.Beeping = beeping
+            myButton.HoldDraw = False
+            AddHandler myButton.MouseDown, AddressOf item_MouseDown
+            AddHandler myButton.MouseMove, AddressOf item_MouseMove
+            AddHandler myButton.Click, AddressOf item_Click
+            associateClickHandler(myButton, AddressOf directory_click)
+            gridMyComp.Add(myButton)
+        Next
+    End Sub
+
 
     Private Sub myFile_Click(ByVal sender As Object, ByVal e As System.EventArgs)
         If cancelClick Then Return
@@ -469,7 +700,26 @@ Public Class frmMyComp
 
     Private Sub sbUpDir_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbUpDir.Click
         If curPath = "" Then Return
-        loadDir(Path.GetDirectoryName(curPath))
+        If NetworkPlacesRoot.IsNetworkRoot(curPath) Then Return
+        If IsHostOnlyUnc(curPath) Then
+            loadDir(NetworkPlacesRoot.NetworkRootToken)
+            Return
+        End If
+        Dim parent As String = Path.GetDirectoryName(curPath)
+        If String.IsNullOrEmpty(parent) OrElse parent = "\" Then
+            If curPath.StartsWith("\\") Then
+                loadDir(NetworkPlacesRoot.NetworkRootToken)
+            Else
+                loadDir("")
+            End If
+            Return
+        End If
+        ' UNC share root parent is \\host — show share list, not My Computer
+        If IsHostOnlyUnc(parent) OrElse (parent.StartsWith("\\") AndAlso parent.TrimStart("\"c).IndexOf("\"c) < 0) Then
+            loadDir(parent)
+            Return
+        End If
+        loadDir(parent)
     End Sub
 
     Private Function getSelectedFiles() As String()
@@ -669,6 +919,10 @@ Public Class frmMyComp
     End Sub
 
     Private Sub sbRefresh_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbRefresh.Click
+        If NetworkPlacesRoot.IsNetworkRoot(curPath) Then
+            BeginNetworkScan()
+            Return
+        End If
         loadDir(curPath)
     End Sub
 
