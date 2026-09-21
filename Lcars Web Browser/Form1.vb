@@ -44,11 +44,22 @@ Public Class form1
     Private Const UrlEndPillW As Integer = 40
     Private Const RailStartY As Integer = TopBarY + TopBarH + ElbowDrop + RailGap
     Private Const TabHeaderWidth As Integer = 80
+    ''' <summary>Gap between top-bar controls and the right elbow so Refresh/tabs do not collide.</summary>
+    Private Const ElbowClearance As Integer = 12
+    Private Const AddressBarH As Integer = 28
+    Private Const LockIconW As Integer = 22
+    Private Const LockIconH As Integer = 22
 
     Private _newTabMenuOpen As Boolean = False
     Private _applyingChrome As Boolean = False
+    Private _bookmarksPanelOpen As Boolean = False
     Private urlEndCap As LCARS.Controls.HalfPillButton
     Private rightElbow As LCARS.Controls.Elbow
+    ''' <summary>Fills empty top-bar space left of the (right-justified) web nav — like fbStartFill.</summary>
+    Private topBarFill As LCARS.Controls.FlatButton
+    ''' <summary>Second-row LCARS border when the address bar is hidden (non-web tabs).</summary>
+    Private addressRowFill As LCARS.Controls.FlatButton
+    Private addressRowEndCap As LCARS.Controls.HalfPillButton
 
     Private ReadOnly _inkPenColors As Color() = {
         Color.FromArgb(255, 153, 0),
@@ -172,13 +183,19 @@ Public Class form1
     End Sub
 
     ''' <summary>
-    ''' Updates address bar, tab title, and https padlock from the active view.
+    ''' Updates address bar, tab title, chrome visibility, and https padlock from the active view.
     ''' </summary>
     Private Sub SyncActiveTabUi()
         Dim tab As IBrowserTab = GetActiveTab()
-        If tab Is Nothing Then Return
+        If tab Is Nothing Then
+            ApplyChromeLayout()
+            Return
+        End If
         Dim webTab As WebBrowserTab = TryCast(tab, WebBrowserTab)
-        If webTab IsNot Nothing AndAlso webTab.WebView.CoreWebView2 Is Nothing Then Return
+        If webTab IsNot Nothing AndAlso webTab.WebView IsNot Nothing AndAlso webTab.WebView.CoreWebView2 Is Nothing Then
+            ApplyChromeLayout()
+            Return
+        End If
 
         Try
             If TabControl1.SelectedTab IsNot Nothing Then
@@ -188,24 +205,58 @@ Public Class form1
             If webTab IsNot Nothing Then
                 sitesecurity()
             Else
-                PictureBox1.Visible = False
-                FlatButton5.Width = 95
+                If PictureBox1 IsNot Nothing Then PictureBox1.Visible = False
             End If
             UpdateSaveButtons()
             UpdateInkToolbar()
         Catch
         End Try
+        ApplyChromeLayout()
     End Sub
 
     Private Sub sitesecurity()
         Dim webaddress As String = TextBox1.Text
-        If webaddress.StartsWith("https:", StringComparison.OrdinalIgnoreCase) Then
-            PictureBox1.Visible = True
-            FlatButton5.Width = 65
-        Else
-            PictureBox1.Visible = False
-            FlatButton5.Width = 95
+        Dim showLock As Boolean = webaddress.StartsWith("https:", StringComparison.OrdinalIgnoreCase)
+        If PictureBox1 IsNot Nothing Then
+            PictureBox1.Visible = showLock AndAlso TextBox1.Visible
         End If
+        If FlatButton5 IsNot Nothing Then FlatButton5.Visible = False
+    End Sub
+
+    Private Function IsActiveWebTab() As Boolean
+        Return TypeOf GetActiveTab() Is WebBrowserTab
+    End Function
+
+    Private Sub UpdateBookmarksButtonHighlight()
+        If FlatButton12 Is Nothing Then Return
+        FlatButton12.Lit = _bookmarksPanelOpen
+        FlatButton12.Color = If(_bookmarksPanelOpen,
+            LCARS.LCARScolorStyles.PrimaryFunction,
+            LCARS.LCARScolorStyles.NavigationFunction)
+    End Sub
+
+    Private Sub EnsureSetHomeInBookmarksPanel()
+        If fbSetHome Is Nothing OrElse GroupBox1 Is Nothing Then Return
+        If fbSetHome.Parent IsNot GroupBox1 Then
+            If fbSetHome.Parent IsNot Nothing Then fbSetHome.Parent.Controls.Remove(fbSetHome)
+            GroupBox1.Controls.Add(fbSetHome)
+        End If
+        Dim sz As Drawing.Size = If(FlatButton19 IsNot Nothing, FlatButton19.Size, New Drawing.Size(100, 29))
+        fbSetHome.Size = sz
+        fbSetHome.ButtonText = "SET HOME"
+        fbSetHome.Text = "SET HOME"
+        If FlatButton19 IsNot Nothing Then
+            Dim leftOfBookmark As Integer = FlatButton19.Left - sz.Width - 8
+            If leftOfBookmark >= 8 Then
+                fbSetHome.Location = New Drawing.Point(leftOfBookmark, FlatButton19.Top)
+            Else
+                fbSetHome.Location = New Drawing.Point(FlatButton19.Right + 8, FlatButton19.Top)
+            End If
+        Else
+            fbSetHome.Location = New Drawing.Point(12, Math.Max(40, GroupBox1.ClientSize.Height - 40))
+        End If
+        fbSetHome.Visible = True
+        fbSetHome.BringToFront()
     End Sub
 
     ''' <summary>
@@ -342,6 +393,7 @@ Public Class form1
         Dim canvasTab As New BoardCanvasTab()
         page.Tag = canvasTab
         AddHandler canvasTab.ContentChanged, AddressOf EditorTab_ContentChanged
+        AddHandler canvasTab.OpenUrlRequested, AddressOf CanvasTab_OpenUrlRequested
 
         page.Controls.Add(canvasTab.ContentControl)
         tabCount += 1
@@ -356,6 +408,14 @@ Public Class form1
         SyncActiveTabUi()
         Return Task.CompletedTask
     End Function
+
+    Private Async Sub CanvasTab_OpenUrlRequested(ByVal sender As Object, ByVal url As String)
+        If String.IsNullOrWhiteSpace(url) Then Return
+        Try
+            Await OpenPathOrUrlAsync(url.Trim())
+        Catch
+        End Try
+    End Sub
 
     Private Async Function AddMarkdownTabAsync(Optional ByVal filePath As String = Nothing) As Task
         Await AddDocumentTabAsync(filePath)
@@ -498,8 +558,8 @@ Public Class form1
                 dlg.DefaultExt = "csv"
             ElseIf tab.TabKind = "Canvas" Then
                 dlg.Title = "Save Canvas"
-                dlg.Filter = "LCARS canvas|*.lcarscanvas|PNG images|*.png|LCARS ink (editable)|*.lcarsink|All files|*.*"
-                dlg.DefaultExt = "lcarscanvas"
+                dlg.Filter = "Obsidian canvas|*.canvas|LCARS canvas|*.lcarscanvas|PNG images|*.png|All files|*.*"
+                dlg.DefaultExt = "canvas"
             ElseIf tab.TabKind = "View" Then
                 dlg.Title = "Export Annotated Image"
                 dlg.Filter = "PNG images|*.png|All files|*.*"
@@ -695,20 +755,25 @@ Public Class form1
         Try
             EnsureUrlEndCap()
 
+            Dim isWeb As Boolean = IsActiveWebTab()
             Dim elbowW As Integer = LeftBorder + ElbowArm
             Dim elbowH As Integer = TopBarH + ElbowDrop
-            Dim appRailX As Integer = Math.Max(MainRailX + LeftBorder + ContentGap, ClientSize.Width - EdgePad - ButtonW)
+            Dim clientW As Integer = Math.Max(320, ClientSize.Width)
+            Dim clientH As Integer = Math.Max(240, ClientSize.Height)
+            Dim appRailX As Integer = clientW - EdgePad - ButtonW
+            ' Extra clearance so nav/tabs clear the right elbow (Refresh was overlapping).
+            Dim rightClear As Integer = ElbowClearance + ContentGap
             Dim contentLeft As Integer = MainRailX + LeftBorder + ElbowArm + ContentGap
-            Dim contentRightPad As Integer = ButtonW + ContentGap + EdgePad
+            Dim contentRightPad As Integer = ButtonW + rightClear + EdgePad
             Dim topBarLeft As Integer = MainRailX + elbowW
-            Dim contentTop As Integer = TopBarY + TopBarH + ContentGap
-            Dim clientW As Integer = Math.Max(contentLeft + 120, ClientSize.Width)
-            Dim clientH As Integer = Math.Max(contentTop + 120, ClientSize.Height)
+            ' Always reserve the address row so chrome does not jump; non-web shows a border bar there.
+            Dim addressRowH As Integer = AddressBarH + ContentGap
+            Dim contentTop As Integer = TopBarY + TopBarH + addressRowH + ContentGap
             Dim contentW As Integer = Math.Max(80, clientW - contentLeft - contentRightPad)
             Dim contentH As Integer = Math.Max(80, clientH - contentTop - EdgePad)
-            appRailX = clientW - EdgePad - ButtonW
 
-            ' Thin upper-left system border (not a label column).
+            EnsureChromeFillers()
+
             If Elbow1 IsNot Nothing Then
                 Elbow1.Visible = True
                 Elbow1.Clickable = True
@@ -746,96 +811,204 @@ Public Class form1
 
             Dim navY As Integer = TopBarY + 3
             Dim navH As Integer = TopBarH - 6
-            ' Navigation cluster right-justified against the right elbow; URL fills the left.
             Dim navRefreshW As Integer = 78
             Dim navStopW As Integer = 52
             Dim navArrowW As Integer = 48
+            Dim homeW As Integer = 88
+            Dim bookmarksW As Integer = 96
             Dim navGap As Integer = 4
-            Dim navClusterW As Integer = navArrowW + navGap + navArrowW + navGap + navStopW + navGap + navRefreshW
-            Dim navRight As Integer = appRailX - ContentGap
-            Dim navLeft As Integer = navRight - navClusterW
-            Dim urlLeft As Integer = topBarLeft + 4
-            Dim urlRight As Integer = navLeft - UrlEndPillW - 8
-            Dim urlW As Integer = Math.Max(80, urlRight - urlLeft)
+            ' Right-justified web nav (+ Home / Bookmarks), same edge as the tab strip.
+            Dim navClusterW As Integer =
+                navArrowW + navGap + navArrowW + navGap + navStopW + navGap + navRefreshW +
+                navGap + homeW + navGap + bookmarksW
+            Dim navMaxRight As Integer = appRailX - rightClear
+            If topBarLeft + 4 + navClusterW > navMaxRight Then
+                Dim overflow As Integer = (topBarLeft + 4 + navClusterW) - navMaxRight
+                homeW = Math.Max(64, homeW - overflow \ 2)
+                bookmarksW = Math.Max(72, bookmarksW - overflow \ 2)
+                navClusterW = navArrowW + navGap + navArrowW + navGap + navStopW + navGap + navRefreshW +
+                    navGap + homeW + navGap + bookmarksW
+            End If
+            Dim navLeft As Integer = navMaxRight - navClusterW
+            If navLeft < topBarLeft + 4 Then navLeft = topBarLeft + 4
 
-            If FlatButton4a IsNot Nothing Then
-                FlatButton4a.Location = New Drawing.Point(topBarLeft, TopBarY)
-                FlatButton4a.Size = New Drawing.Size(Math.Max(40, urlLeft + urlW - topBarLeft), TopBarH)
-                FlatButton4a.Clickable = False
-                FlatButton4a.ButtonText = ""
-                FlatButton4a.Text = ""
+            ' Shell-style filler left of the nav cluster (or full top bar when nav is hidden).
+            Dim topFillRight As Integer = If(isWeb, navLeft - ContentGap, navMaxRight)
+            Dim topFillW As Integer = Math.Max(8, topFillRight - topBarLeft)
+            If topBarFill IsNot Nothing Then
+                topBarFill.Visible = True
+                topBarFill.Location = New Drawing.Point(topBarLeft, TopBarY)
+                topBarFill.Size = New Drawing.Size(topFillW, TopBarH)
+                topBarFill.SendToBack()
             End If
 
-            If FlatButton1 IsNot Nothing Then
-                FlatButton1.Location = New Drawing.Point(navRight - navRefreshW, navY)
-                FlatButton1.Size = New Drawing.Size(navRefreshW, navH)
-                FlatButton1.ButtonText = "REFRESH"
-                FlatButton1.Text = "REFRESH"
-            End If
-            If FlatButton2 IsNot Nothing Then
-                FlatButton2.Location = New Drawing.Point(navRight - navRefreshW - navGap - navStopW, navY)
-                FlatButton2.Size = New Drawing.Size(navStopW, navH)
-                FlatButton2.ButtonText = "STOP"
-                FlatButton2.Text = "STOP"
-            End If
-            If Arrowbutton2 IsNot Nothing Then
-                Arrowbutton2.Location = New Drawing.Point(navRight - navRefreshW - navGap - navStopW - navGap - navArrowW, navY)
-                Arrowbutton2.Size = New Drawing.Size(navArrowW, navH)
-                Arrowbutton2.ButtonText = ">"
-                Arrowbutton2.Text = ">"
-            End If
+            Dim x As Integer = navLeft
             If Arrowbutton1 IsNot Nothing Then
-                Arrowbutton1.Location = New Drawing.Point(navLeft, navY)
+                Arrowbutton1.Visible = isWeb
+                Arrowbutton1.Location = New Drawing.Point(x, navY)
                 Arrowbutton1.Size = New Drawing.Size(navArrowW, navH)
                 Arrowbutton1.ButtonText = "<"
                 Arrowbutton1.Text = "<"
+                x += navArrowW + navGap
+            End If
+            If Arrowbutton2 IsNot Nothing Then
+                Arrowbutton2.Visible = isWeb
+                Arrowbutton2.Location = New Drawing.Point(x, navY)
+                Arrowbutton2.Size = New Drawing.Size(navArrowW, navH)
+                Arrowbutton2.ButtonText = ">"
+                Arrowbutton2.Text = ">"
+                x += navArrowW + navGap
+            End If
+            If FlatButton2 IsNot Nothing Then
+                FlatButton2.Visible = isWeb
+                FlatButton2.Location = New Drawing.Point(x, navY)
+                FlatButton2.Size = New Drawing.Size(navStopW, navH)
+                FlatButton2.ButtonText = "STOP"
+                FlatButton2.Text = "STOP"
+                x += navStopW + navGap
+            End If
+            If FlatButton1 IsNot Nothing Then
+                FlatButton1.Visible = isWeb
+                FlatButton1.Location = New Drawing.Point(x, navY)
+                FlatButton1.Size = New Drawing.Size(navRefreshW, navH)
+                FlatButton1.ButtonText = "REFRESH"
+                FlatButton1.Text = "REFRESH"
+                x += navRefreshW + navGap
+            End If
+            If FlatButton6 IsNot Nothing Then
+                FlatButton6.Visible = isWeb
+                FlatButton6.Location = New Drawing.Point(x, navY)
+                FlatButton6.Size = New Drawing.Size(homeW, navH)
+                FlatButton6.ButtonText = "HOME"
+                FlatButton6.Text = "HOME"
+                x += homeW + navGap
+            End If
+            If FlatButton12 IsNot Nothing Then
+                FlatButton12.Visible = isWeb
+                FlatButton12.Location = New Drawing.Point(x, navY)
+                FlatButton12.Size = New Drawing.Size(bookmarksW, navH)
+                FlatButton12.ButtonText = "BOOKMARKS"
+                FlatButton12.Text = "BOOKMARKS"
+                UpdateBookmarksButtonHighlight()
             End If
 
-            ' Drop "WEB BROWSER" title; URL bar ends in a half-pill.
             If ComplexButton1 IsNot Nothing Then
                 ComplexButton1.Visible = False
                 ComplexButton1.SideText = ""
             End If
 
+            ' Address row: URL when web; LCARS border bar when not (same reserved height).
+            Dim addrY As Integer = TopBarY + TopBarH + 2
+            Dim addrLeft As Integer = topBarLeft + 4
+            Dim addrRight As Integer = appRailX - rightClear
+            Dim lockGap As Integer = 4
+            Dim lockReserve As Integer = LockIconW + lockGap
+            Dim urlLeft As Integer = addrLeft + lockReserve
+            Dim urlRight As Integer = addrRight - UrlEndPillW - 8
+            Dim urlW As Integer = Math.Max(80, urlRight - urlLeft)
+
+            If FlatButton4a IsNot Nothing Then
+                ' Keep as thin underlay only for web URL chrome; non-web uses addressRowFill.
+                FlatButton4a.Visible = isWeb
+                If isWeb Then
+                    FlatButton4a.Location = New Drawing.Point(topBarLeft, TopBarY + TopBarH)
+                    FlatButton4a.Size = New Drawing.Size(Math.Max(40, addrRight - topBarLeft), AddressBarH)
+                    FlatButton4a.Clickable = False
+                    FlatButton4a.ButtonText = ""
+                    FlatButton4a.Text = ""
+                End If
+            End If
+
+            If addressRowFill IsNot Nothing Then
+                If isWeb Then
+                    addressRowFill.Visible = False
+                Else
+                    addressRowFill.Visible = True
+                    addressRowFill.Location = New Drawing.Point(topBarLeft, TopBarY + TopBarH)
+                    addressRowFill.Size = New Drawing.Size(Math.Max(40, addrRight - topBarLeft - UrlEndPillW - 4), AddressBarH)
+                    addressRowFill.SendToBack()
+                End If
+            End If
+            If addressRowEndCap IsNot Nothing Then
+                If isWeb Then
+                    addressRowEndCap.Visible = False
+                Else
+                    addressRowEndCap.Visible = True
+                    addressRowEndCap.Location = New Drawing.Point(topBarLeft + addressRowFill.Width + 2, addrY)
+                    addressRowEndCap.Size = New Drawing.Size(UrlEndPillW, AddressBarH - 4)
+                    addressRowEndCap.BringToFront()
+                End If
+            End If
+
             If TextBox1 IsNot Nothing Then
-                TextBox1.Location = New Drawing.Point(urlLeft, navY)
-                TextBox1.Size = New Drawing.Size(urlW, navH)
+                TextBox1.Visible = isWeb
+                TextBox1.Location = New Drawing.Point(urlLeft, addrY)
+                TextBox1.Size = New Drawing.Size(urlW, AddressBarH - 4)
+                If isWeb Then TextBox1.BringToFront()
             End If
             If FlatButton13 IsNot Nothing Then
-                FlatButton13.Location = New Drawing.Point(urlLeft, TopBarY + TopBarH - 4)
+                FlatButton13.Visible = isWeb
+                FlatButton13.Location = New Drawing.Point(urlLeft, addrY + AddressBarH - 6)
                 FlatButton13.Size = New Drawing.Size(urlW, 4)
             End If
             If urlEndCap IsNot Nothing Then
-                urlEndCap.Visible = True
-                urlEndCap.Location = New Drawing.Point(urlLeft + urlW + 4, navY)
-                urlEndCap.Size = New Drawing.Size(UrlEndPillW, navH)
-                urlEndCap.BringToFront()
+                urlEndCap.Visible = isWeb
+                If isWeb Then
+                    urlEndCap.Location = New Drawing.Point(urlLeft + urlW + 4, addrY)
+                    urlEndCap.Size = New Drawing.Size(UrlEndPillW, AddressBarH - 4)
+                    urlEndCap.BringToFront()
+                End If
             End If
-            If Label4 IsNot Nothing Then
-                Label4.Location = New Drawing.Point(contentLeft, TopBarY + TopBarH - 2)
+            If PictureBox1 IsNot Nothing Then
+                PictureBox1.Size = New Drawing.Size(LockIconW, LockIconH)
+                PictureBox1.Location = New Drawing.Point(addrLeft, addrY + Math.Max(0, (AddressBarH - 4 - LockIconH) \ 2))
+                PictureBox1.SizeMode = PictureBoxSizeMode.Zoom
+                If isWeb Then
+                    sitesecurity()
+                    PictureBox1.BringToFront()
+                Else
+                    PictureBox1.Visible = False
+                End If
             End If
+            If Label4 IsNot Nothing Then Label4.Visible = False
 
             If FlatButton5 IsNot Nothing Then FlatButton5.Visible = False
             If FlatButton9 IsNot Nothing Then FlatButton9.Visible = False
             If FlatButton10 IsNot Nothing Then FlatButton10.Visible = False
 
+            ' SET HOME lives in the bookmarks panel, not the right rail.
+            EnsureSetHomeInBookmarksPanel()
+            If fbSetHome IsNot Nothing AndAlso Not _bookmarksPanelOpen Then
+                ' Still parented to GroupBox1; visibility follows panel.
+                fbSetHome.Visible = True
+            End If
+
             Dim railY As Integer = TopBarY + elbowH + RailGap
             Dim railStep As Integer = ButtonH + RailGap
-            ' App controls on the right; CLOSE shares Start Menu's horizontal row.
-            PlaceAppRailButton(FlatButton6, appRailX, railY, "HOME PAGE") : railY += railStep
-            PlaceAppRailButton(fbSetHome, appRailX, railY, "SET HOME") : railY += railStep
             PlaceAppRailButton(FlatButton4, appRailX, railY, "OPEN FILE") : railY += railStep
             PlaceAppRailButton(FlatButton7, appRailX, railY, "NEW TAB") : railY += railStep
             PlaceAppRailButton(FlatButton8, appRailX, railY, "CLOSE TAB") : railY += railStep
-            PlaceAppRailButton(FlatButton12, appRailX, railY, "BOOKMARKS") : railY += railStep
-            PlaceAppRailButton(FlatButton14, appRailX, railY, "ZOOM") : railY += railStep
+            ' ZOOM cycles FlatButton14 → 15 → 16; keep them stacked on one rail slot.
+            If FlatButton14 IsNot Nothing AndAlso FlatButton15 IsNot Nothing AndAlso FlatButton16 IsNot Nothing Then
+                If Not FlatButton14.Visible AndAlso Not FlatButton15.Visible AndAlso Not FlatButton16.Visible Then
+                    FlatButton14.Visible = True
+                End If
+                PlaceZoomRailButton(FlatButton14, appRailX, railY, "ZOOM")
+                PlaceZoomRailButton(FlatButton15, appRailX, railY, "ZOOM")
+                PlaceZoomRailButton(FlatButton16, appRailX, railY, "ZOOM")
+                railY += railStep
+            Else
+                PlaceAppRailButton(FlatButton14, appRailX, railY, "ZOOM") : railY += railStep
+            End If
 
             If ProgressBar1 IsNot Nothing Then
-                ProgressBar1.Visible = True
-                ProgressBar1.Location = New Drawing.Point(appRailX, railY)
-                ProgressBar1.Size = New Drawing.Size(ButtonW, ButtonH)
-                ProgressBar1.BringToFront()
-                railY += railStep
+                ProgressBar1.Visible = isWeb
+                If isWeb Then
+                    ProgressBar1.Location = New Drawing.Point(appRailX, railY)
+                    ProgressBar1.Size = New Drawing.Size(ButtonW, ButtonH)
+                    ProgressBar1.BringToFront()
+                    railY += railStep
+                End If
             End If
 
             If FlatButton11 IsNot Nothing Then
@@ -847,12 +1020,12 @@ Public Class form1
             End If
 
             PlaceShellAlignedCloseButton(FlatButton3, EdgePad)
-            ' Shell Start Menu is 100px; browser rail buttons are ButtonW — keep CLOSE matched so it doesn't cover the page.
             If FlatButton3 IsNot Nothing Then
                 FlatButton3.Width = ButtonW
                 FlatButton3.Left = Math.Max(0, ClientSize.Width - EdgePad - ButtonW)
             End If
-            Dim popY As Integer = TopBarY + elbowH + RailGap + (railStep * 4)
+
+            Dim popY As Integer = TopBarY + elbowH + RailGap + (railStep * 1)
             Dim workspaceX As Integer = appRailX - ButtonW - ContentGap
             PlaceWorkspaceButtonAt(fbNewWeb, workspaceX, popY, "NEW WEB") : popY += railStep
             PlaceWorkspaceButtonAt(fbNewText, workspaceX, popY, "NEW DOCUMENT") : popY += railStep
@@ -875,27 +1048,76 @@ Public Class form1
             PlaceInkButton(fbInkClear, inkY, "CLEAR")
 
             If TabControl1 IsNot Nothing Then
-                ' Top edge, packed toward the right (not a vertical right-column tab strip).
                 TabControl1.Alignment = TabAlignment.Top
                 TabControl1.SizeMode = TabSizeMode.Normal
                 TabControl1.Multiline = False
                 TabControl1.RightToLeft = RightToLeft.Yes
                 TabControl1.RightToLeftLayout = True
+                TabControl1.Visible = Not _bookmarksPanelOpen
                 TabControl1.SetBounds(contentLeft, contentTop, contentW, contentH)
             End If
             If GroupBox1 IsNot Nothing Then
+                GroupBox1.Visible = _bookmarksPanelOpen
                 GroupBox1.SetBounds(contentLeft, contentTop, contentW, contentH)
+                If _bookmarksPanelOpen Then EnsureSetHomeInBookmarksPanel()
             End If
 
+            If topBarFill IsNot Nothing Then topBarFill.SendToBack()
+            If addressRowFill IsNot Nothing AndAlso addressRowFill.Visible Then addressRowFill.SendToBack()
             If rightElbow IsNot Nothing Then rightElbow.BringToFront()
             ApplyNewTabMenuVisibility()
             UpdateInkToolbar()
             BringWorkspaceControlsToFront()
             If FlatButton3 IsNot Nothing Then FlatButton3.BringToFront()
+            If isWeb AndAlso PictureBox1 IsNot Nothing AndAlso PictureBox1.Visible Then PictureBox1.BringToFront()
+            If isWeb AndAlso TextBox1 IsNot Nothing Then TextBox1.BringToFront()
+            If isWeb Then
+                If Arrowbutton1 IsNot Nothing Then Arrowbutton1.BringToFront()
+                If Arrowbutton2 IsNot Nothing Then Arrowbutton2.BringToFront()
+                If FlatButton1 IsNot Nothing Then FlatButton1.BringToFront()
+                If FlatButton2 IsNot Nothing Then FlatButton2.BringToFront()
+                If FlatButton6 IsNot Nothing Then FlatButton6.BringToFront()
+                If FlatButton12 IsNot Nothing Then FlatButton12.BringToFront()
+            End If
         Finally
             ResumeLayout(True)
             _applyingChrome = False
         End Try
+    End Sub
+
+    Private Sub EnsureChromeFillers()
+        EnsureUrlEndCap()
+        If topBarFill Is Nothing OrElse topBarFill.IsDisposed Then
+            topBarFill = New LCARS.Controls.FlatButton() With {
+                .Name = "topBarFill",
+                .Clickable = False,
+                .ButtonText = "",
+                .Text = "",
+                .Color = LCARS.LCARScolorStyles.StaticTan
+            }
+            Controls.Add(topBarFill)
+        End If
+        If addressRowFill Is Nothing OrElse addressRowFill.IsDisposed Then
+            addressRowFill = New LCARS.Controls.FlatButton() With {
+                .Name = "addressRowFill",
+                .Clickable = False,
+                .ButtonText = "",
+                .Text = "",
+                .Color = LCARS.LCARScolorStyles.LCARSDisplayOnly
+            }
+            Controls.Add(addressRowFill)
+        End If
+        If addressRowEndCap Is Nothing OrElse addressRowEndCap.IsDisposed Then
+            addressRowEndCap = New LCARS.Controls.HalfPillButton() With {
+                .Name = "addressRowEndCap",
+                .Clickable = False,
+                .ButtonText = "",
+                .Text = "",
+                .Color = LCARS.LCARScolorStyles.StaticTan,
+                .ButtonStyle = LCARS.Controls.HalfPillButton.LCARSbuttonStyles.PillRight
+            }
+            Controls.Add(addressRowEndCap)
+        End If
     End Sub
 
     Private Sub EnsureUrlEndCap()
@@ -928,6 +1150,15 @@ Public Class form1
     Private Sub PlaceAppRailButton(ByVal btn As LCARS.Controls.FlatButton, ByVal x As Integer, ByVal y As Integer, ByVal caption As String)
         If btn Is Nothing Then Return
         btn.Visible = True
+        btn.Location = New Drawing.Point(x, y)
+        btn.Size = New Drawing.Size(ButtonW, ButtonH)
+        btn.ButtonText = caption
+        btn.Text = caption
+        btn.ButtonTextAlign = ContentAlignment.MiddleCenter
+    End Sub
+
+    Private Sub PlaceZoomRailButton(ByVal btn As LCARS.Controls.FlatButton, ByVal x As Integer, ByVal y As Integer, ByVal caption As String)
+        If btn Is Nothing Then Return
         btn.Location = New Drawing.Point(x, y)
         btn.Size = New Drawing.Size(ButtonW, ButtonH)
         btn.ButtonText = caption
@@ -1218,12 +1449,12 @@ Public Class form1
     Private Async Sub fbOpenFile_Click(ByVal sender As Object, ByVal e As EventArgs)
         Using dlg As New OpenFileDialog()
             dlg.Title = "Open File"
-            dlg.Filter = "All supported files|*.html;*.htm;*.url;*.pdf;*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.txt;*.md;*.rtf;*.docx;*.csv;*.xlsx;*.lcarsink;*.lcarscanvas|" &
+            dlg.Filter = "All supported files|*.html;*.htm;*.url;*.pdf;*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.txt;*.md;*.rtf;*.docx;*.csv;*.xlsx;*.lcarsink;*.lcarscanvas;*.canvas|" &
                          "Web pages|*.html;*.htm;*.url|" &
                          "Documents and images|*.pdf;*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp|" &
                          "Documents|*.txt;*.md;*.rtf;*.docx|" &
                          "Spreadsheets|*.csv;*.xlsx|" &
-                         "Canvas|*.lcarscanvas;*.lcarsink|" &
+                         "Canvas|*.canvas;*.lcarscanvas;*.lcarsink|" &
                          "All files|*.*"
             dlg.FilterIndex = 1
             If dlg.ShowDialog(Me) = DialogResult.OK Then
@@ -1350,8 +1581,12 @@ Public Class form1
     End Sub
 
     Private Sub FlatButton12_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles FlatButton12.Click
-        TabControl1.Visible = Not TabControl1.Visible
-        GroupBox1.Visible = Not GroupBox1.Visible
+        _bookmarksPanelOpen = Not _bookmarksPanelOpen
+        If TabControl1 IsNot Nothing Then TabControl1.Visible = Not _bookmarksPanelOpen
+        If GroupBox1 IsNot Nothing Then GroupBox1.Visible = _bookmarksPanelOpen
+        UpdateBookmarksButtonHighlight()
+        If _bookmarksPanelOpen Then EnsureSetHomeInBookmarksPanel()
+        ApplyChromeLayout()
     End Sub
 
     Private Sub FlatButton20_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles FlatButton20.Click
@@ -1380,6 +1615,9 @@ Public Class form1
         End If
         GroupBox1.Visible = False
         TabControl1.Visible = True
+        _bookmarksPanelOpen = False
+        UpdateBookmarksButtonHighlight()
+        ApplyChromeLayout()
     End Sub
 
     Private Sub TextBox1_KeyPress(ByVal sender As Object, ByVal e As KeyPressEventArgs) Handles TextBox1.KeyPress

@@ -45,6 +45,10 @@ Friend Class Download
             End If
 
             SetBottomTextSafe("Downloading")
+            Dim parentDir As String = System.IO.Path.GetDirectoryName(savePath)
+            If Not String.IsNullOrEmpty(parentDir) AndAlso Not System.IO.Directory.Exists(parentDir) Then
+                System.IO.Directory.CreateDirectory(parentDir)
+            End If
             Dim client As New System.Net.WebClient()
             WebRequestHelper.ConfigureWebClient(client, downloadPath)
             client.DownloadFile(downloadPath, savePath)

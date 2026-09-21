@@ -1,0 +1,6 @@
+# Copy to update-server.local.ps1 and edit for your LAN.
+# update-server.local.ps1 is gitignored.
+
+$LcarsUpdateBaseUrl = "http://YOUR-UPDATE-HOST:8765/"
+$LcarsUpdateRemoteHost = "YOUR-SSH-HOST"
+$LcarsUpdateRemotePath = "~/lcars-update"

@@ -332,14 +332,14 @@ Partial Class frmMyComp
         'sbClose
         '
         Me.sbClose.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.sbClose.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
+        Me.sbClose.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.RoundedSquare
         Me.sbClose.ButtonText = "CLOSE"
         Me.sbClose.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.sbClose.ButtonTextHeight = 14
         Me.sbClose.Color = LCARS.LCARScolorStyles.FunctionOffline
-        Me.sbClose.Location = New System.Drawing.Point(532, 526)
+        Me.sbClose.Location = New System.Drawing.Point(533, 526)
         Me.sbClose.Name = "sbClose"
-        Me.sbClose.Size = New System.Drawing.Size(100, 28)
+        Me.sbClose.Size = New System.Drawing.Size(87, 26)
         Me.sbClose.TabIndex = 54
         Me.sbClose.Text = "CLOSE"
         '

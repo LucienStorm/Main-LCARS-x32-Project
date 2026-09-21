@@ -109,15 +109,15 @@ Public Class Installing
                 Return
             End If
             Try
-                Dim myData As New COPYDATASTRUCT
-                myData = System.Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, GetType(COPYDATASTRUCT))
+            Dim myData As New COPYDATASTRUCT
+            myData = System.Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, GetType(COPYDATASTRUCT))
 
-                Dim myRect As New Rectangle
-                myRect = System.Runtime.InteropServices.Marshal.PtrToStructure(myData.lpData, GetType(Rectangle))
+            Dim myRect As New Rectangle
+            myRect = System.Runtime.InteropServices.Marshal.PtrToStructure(myData.lpData, GetType(Rectangle))
 
-                If Not Me.Bounds = myRect Then
-                    Me.Bounds = myRect
-                End If
+            If Not Me.Bounds = myRect Then
+                Me.Bounds = myRect
+            End If
             Catch ex As Exception
                 WriteInstallCrashLog("WndProc resize failed: " & ex.ToString())
             End Try
@@ -180,14 +180,14 @@ Public Class Installing
             EnsureInstallChrome()
             stagingDir = ResolveStagingDirectory()
             WriteInstallLog("Staging folder: " & stagingDir)
-            'Code for x32 messages
-            InterMsgID = RegisterWindowMessageA("LCARS_X32_MSG")
+        'Code for x32 messages
+        InterMsgID = RegisterWindowMessageA("LCARS_X32_MSG")
             Dim handleText As String = GetSetting("LCARS x32", "Application", "MainWindowHandle", "0")
             Dim handleValue As Integer = 0
             Integer.TryParse(handleText, handleValue)
             x32Handle = New IntPtr(handleValue)
             If x32Handle <> IntPtr.Zero Then
-                SendMessage(x32Handle, InterMsgID, Me.Handle, 1)
+        SendMessage(x32Handle, InterMsgID, Me.Handle, 1)
             End If
             ' Full physical screen — WorkingArea is inset by LCARS menus and clips Finish.
             ignoreWorkingAreaResize = True
@@ -927,9 +927,9 @@ Public Class Installing
                 ForceKillProcesses(lcarsApps)
                 If Not WaitForProcessesToExit(lcarsApps, 8) Then
                     ShellFallback.ClearPendingShellRestartFlag()
-                    MsgBox("LCARS did not close in time. Some files may be locked." & vbNewLine & _
+                MsgBox("LCARS did not close in time. Some files may be locked." & vbNewLine & _
                            "If the desktop does not return, sign out and back in.")
-                End If
+            End If
             Else
                 ForceKillProcesses(lcarsApps)
                 WaitForProcessesToExit(lcarsApps, 8)
@@ -952,7 +952,7 @@ Public Class Installing
         If restartLcarsAfterClose Then
             Try
                 RestartLcarsUnelevated()
-            Catch ex As Exception
+        Catch ex As Exception
                 WriteInstallLog("LCARS restart failed: " & ex.ToString())
                 ShellFallback.ClearPendingShellRestartFlag()
                 Try
@@ -963,9 +963,9 @@ Public Class Installing
                     psi.UseShellExecute = True
                     Process.Start(psi)
                 Catch ex2 As Exception
-                    ShellFallback.EnsureExplorerRunningIfNeeded()
+            ShellFallback.EnsureExplorerRunningIfNeeded()
                     MsgBox("LCARS could not restart after the update." & vbNewLine & vbNewLine & ex2.ToString())
-                End Try
+        End Try
             End Try
         End If
     End Sub
@@ -1050,7 +1050,9 @@ Public Class Installing
             Try
                 ' Re-kill OSK/main helpers each attempt — USB locks and warm-prewarm can reappear.
                 If isBinary Then
-                    ForceKillProcesses(New String() {"OnScreenKeyboard", "LCARSmain", "LCARSWebBrowser", "LCARSTerminal", "LCARSexplorer"})
+                    ForceKillProcesses(New String() {
+                        "OnScreenKeyboard", "LCARSmain", "LCARSWebBrowser", "LCARSTerminal",
+                        "LCARSexplorer", "LCARSmedia", "LCARSshutdown", "LCARSUpdate"})
                     Threading.Thread.Sleep(200)
                 End If
 
@@ -1097,7 +1099,7 @@ Public Class Installing
                         End If
                     Catch
                     End Try
-                    Return True
+                Return True
                 End If
             Catch ex As Exception
                 lastInstallError = ex.ToString()
@@ -1120,11 +1122,25 @@ Public Class Installing
             WriteInstallLog("Extracted zip into install folder: " & zipPath)
             Return True
         Catch ex As Exception
-            failed = True
+            ' Do not set failed here — caller decides. Zip on disk lets LCARSmedia extract on first play.
             lastInstallError = "Zip extract failed for " & zipPath & vbNewLine & ex.ToString()
             WriteInstallCrashLog(lastInstallError)
             Return False
         End Try
+    End Function
+
+    ''' <summary>
+    ''' Components that may stay locked (shell OSK) or can finish later (VLC zip auto-extract).
+    ''' A failure here must not show "Data Transfer incomplete" when critical binaries landed.
+    ''' </summary>
+    Private Function IsSoftFailComponent(ByVal fileName As String) As Boolean
+        If String.IsNullOrEmpty(fileName) Then Return False
+        Dim n As String = fileName.Trim()
+        If String.Equals(n, "OnScreenKeyboard.exe", StringComparison.OrdinalIgnoreCase) Then Return True
+        If String.Equals(n, "OnScreenKeyboard.exe.config", StringComparison.OrdinalIgnoreCase) Then Return True
+        If String.Equals(n, "OnScreenKeyboard.build.txt", StringComparison.OrdinalIgnoreCase) Then Return True
+        If n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) Then Return True
+        Return False
     End Function
 
     ''' <summary>
@@ -1166,7 +1182,7 @@ Public Class Installing
                 If Not WaitForProcessesToExit(blockers, 5) Then
                     WriteInstallCrashLog("OSK force-replace attempt " & attempt.ToString() & ": processes still running after WaitForExit")
                     ForceKillProcesses(blockers)
-                    Threading.Thread.Sleep(500)
+                Threading.Thread.Sleep(500)
                 End If
 
                 If System.IO.File.Exists(targetFile) Then
@@ -1176,7 +1192,7 @@ Public Class Installing
                             System.IO.File.Delete(bak)
                         End If
                     Catch
-                    End Try
+            End Try
                     Try
                         System.IO.File.Move(targetFile, bak)
                         WriteInstallCrashLog("OSK renamed aside: " & bak)
@@ -1294,30 +1310,54 @@ Public Class Installing
             For Each myComponent As FileEntry In fileList
                 RaiseEvent DisplayMessage("Copying " & myComponent.name)
                 Try
+                    ' OSK is handled by ForceReplaceOnScreenKeyboard after the loop — skip here
+                    ' so a locked shell keyboard cannot mark the whole transfer incomplete.
+                    If String.Equals(myComponent.name, "OnScreenKeyboard.exe", StringComparison.OrdinalIgnoreCase) Then
+                        RaiseEvent DisplayMessage("Deferring OnScreenKeyboard.exe to force-replace pass")
+                        WriteInstallLog("Skipped OSK in main copy loop (force-replace will run).")
+                        componentsInstalled += 1
+                        RaiseEvent ProgressChanged(componentsInstalled * section)
+                        Continue For
+                    End If
+
                     Dim sourceFile As String = StagingFile(myComponent.name)
                     Dim targetFile As String = path & "\" & myComponent.name
+                    Dim targetDir As String = System.IO.Path.GetDirectoryName(targetFile)
+                    If Not String.IsNullOrEmpty(targetDir) AndAlso Not System.IO.Directory.Exists(targetDir) Then
+                        System.IO.Directory.CreateDirectory(targetDir)
+                    End If
                     If Not CopyUpdateFile(sourceFile, targetFile) Then
-                        fileCopyFailed = True
-                        failed = True
-                        RaiseEvent DisplayMessage("Copying failed: " & myComponent.name)
-                        lastInstallError = "Could not copy " & myComponent.name & " to " & targetFile & _
-                            If(String.IsNullOrEmpty(lastInstallError), "", vbNewLine & lastInstallError)
+                        If IsSoftFailComponent(myComponent.name) Then
+                            RaiseEvent DisplayMessage("Warning: could not copy " & myComponent.name & " (continuing)")
+                            WriteInstallLog("Soft-fail copy: " & myComponent.name & " — " & lastInstallError)
+                        Else
+                            fileCopyFailed = True
+                            failed = True
+                            RaiseEvent DisplayMessage("Copying failed: " & myComponent.name)
+                            lastInstallError = "Could not copy " & myComponent.name & " to " & targetFile & _
+                                If(String.IsNullOrEmpty(lastInstallError), "", vbNewLine & lastInstallError)
+                        End If
                     Else
                         localVersions.UpdateVersion(myComponent.name, myComponent.version)
                         localVersions.SaveFile()
                         ' lib-vlc.zip (and any future runtime zips): keep the archive for MD5 skip checks, unpack payload.
                         If myComponent.name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) Then
                             If Not ExtractZipIntoInstall(targetFile, path) Then
-                                failed = True
-                                fileCopyFailed = True
-                                RaiseEvent DisplayMessage("Extracting failed: " & myComponent.name)
+                                ' Zip is on disk; LCARSmedia extracts on first use. Do not fail the transfer.
+                                RaiseEvent DisplayMessage("Warning: extract deferred for " & myComponent.name & " (will unpack on first media play)")
+                                WriteInstallLog("Soft-fail zip extract: " & myComponent.name & " — " & lastInstallError)
                             End If
                         End If
                     End If
                 Catch ex As Exception
-                    failed = True
-                    lastInstallError = ex.ToString()
-                    RaiseEvent DisplayMessage("Copying failed: " & myComponent.name)
+                    If IsSoftFailComponent(myComponent.name) Then
+                        RaiseEvent DisplayMessage("Warning: " & myComponent.name & " — " & ex.Message)
+                        WriteInstallLog("Soft-fail exception: " & myComponent.name & " — " & ex.ToString())
+                    Else
+                        failed = True
+                        lastInstallError = ex.ToString()
+                        RaiseEvent DisplayMessage("Copying failed: " & myComponent.name)
+                    End If
                 End Try
                 componentsInstalled += 1
                 RaiseEvent ProgressChanged(componentsInstalled * section)
@@ -1327,8 +1367,24 @@ Public Class Installing
             ' respawned LCARS mid-loop; kill again, wait for exit, then rename-aside + verify
             ' with many retries. Hard-fail if OnScreenKeyboard.exe does not land.
             If Not ForceReplaceOnScreenKeyboard() Then
-                fileCopyFailed = True
-                failed = True
+                ' OSK is often locked by the shell; do not fail the whole update (media/main can still land).
+                RaiseEvent DisplayMessage("Warning: OnScreenKeyboard.exe may need a reboot to finish updating.")
+                WriteInstallLog("OSK force-replace failed — continuing without hard-fail.")
+                ' Clear lastInstallError if it only describes OSK — otherwise the finish screen looks fatal.
+                If Not String.IsNullOrEmpty(lastInstallError) AndAlso
+                   lastInstallError.IndexOf("OnScreenKeyboard", StringComparison.OrdinalIgnoreCase) >= 0 AndAlso
+                   Not failed Then
+                    lastInstallError = "Note: " & lastInstallError
+                End If
+            Else
+                ' Mark OSK version when force-replace succeeded
+                For Each myComponent As FileEntry In fileList
+                    If String.Equals(myComponent.name, "OnScreenKeyboard.exe", StringComparison.OrdinalIgnoreCase) Then
+                        localVersions.UpdateVersion(myComponent.name, myComponent.version)
+                        localVersions.SaveFile()
+                        Exit For
+                    End If
+                Next
             End If
 
             ' Hard-fail if critical binaries in THIS update did not land — partial updates
@@ -1336,9 +1392,10 @@ Public Class Installing
             Dim criticalNames As New System.Collections.Generic.Dictionary(Of String, Boolean)(StringComparer.OrdinalIgnoreCase)
             criticalNames("LCARSmain.exe") = True
             criticalNames("LCARS.dll") = True
-            criticalNames("OnScreenKeyboard.exe") = True
             criticalNames("LCARSUpdate.exe") = True
             criticalNames("runInstallScript.exe") = True
+            ' OnScreenKeyboard.exe intentionally omitted: lock contention caused "update failed"
+            ' then "up to date" on retry even when LCARSmedia had already updated.
             Dim missingCritical As New System.Text.StringBuilder()
             For Each myComponent As FileEntry In fileList
                 If Not criticalNames.ContainsKey(myComponent.name) Then Continue For
@@ -1359,6 +1416,9 @@ Public Class Installing
                     "Install folder: " & path
                 WriteInstallLog(lastInstallError)
                 RaiseEvent DisplayMessage("Critical file verify failed — re-run update. " & path)
+            ElseIf Not fileCopyFailed Then
+                ' Criticals OK: clear a false "failed" if only soft issues were logged earlier.
+                failed = False
             End If
 
             For Each myComponent As FileEntry In extractList
@@ -1533,7 +1593,9 @@ Public Class Installing
             If lblTitle IsNot Nothing Then
                 lblTitle.Text = "Data Transfer incomplete"
             End If
-            lblMessage.Text = "Some components failed to update. Please re-run LCARSUpdate.exe to correct this problem." & vbNewLine & _
+            Dim detail As String = If(String.IsNullOrEmpty(lastInstallError), "(see install log)", lastInstallError)
+            lblMessage.Text = "Some components failed to update. Please re-run LCARSUpdate.exe to correct this problem." & vbNewLine & vbNewLine &
+                              detail & vbNewLine & vbNewLine &
                               "Log: " & CrashLogPath()
             If Not String.IsNullOrEmpty(lastInstallError) Then
                 lstStatus.Items.Add(lastInstallError)

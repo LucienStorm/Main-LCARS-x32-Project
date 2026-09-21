@@ -46,6 +46,14 @@
       <HintPath>lib\MSTSCLib.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="RemoteViewing">
+      <HintPath>lib\RemoteViewing.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="RemoteViewing.Windows.Forms">
+      <HintPath>lib\RemoteViewing.Windows.Forms.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
@@ -75,11 +83,17 @@
     <Compile Include="ConsoleHostView.vb">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Rdp\RemoteProtocol.vb" />
+    <Compile Include="Rdp\RemoteHistoryStore.vb" />
+    <Compile Include="Rdp\RemoteNetworkDiscovery.vb" />
     <Compile Include="Rdp\RdpConnectionProfile.vb" />
     <Compile Include="Rdp\RdpProfileStore.vb" />
     <Compile Include="Rdp\RdpFileCodec.vb" />
     <Compile Include="Rdp\RdpCredentialStore.vb" />
     <Compile Include="Rdp\RdpClientHost.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Rdp\VncClientHost.vb">
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Rdp\RdpConnectionListPanel.vb">

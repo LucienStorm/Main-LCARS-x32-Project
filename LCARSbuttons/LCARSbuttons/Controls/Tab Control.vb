@@ -178,10 +178,8 @@ Namespace Controls
                 mybutton.ButtonTextAlign = ContentAlignment.BottomRight
                 mybutton.Color = mytab.Color
 
-                'Button beeping also needs to be handled.  I'm working on a way for new controls
-                'and community made programs to easily interface with LCARSmain so they know when
-                'they need to turn beeping on/off or when the colors have changed.
-                mybutton.Beeping = False
+                ' Match shell / form beeping so tab clicks make sound when enabled.
+                mybutton.Beeping = LCARS.x32.modSettings.ButtonBeep
 
                 'position the button based on how many buttons are already there.
                 mybutton.Top = (buttonPanel.Controls.Count * 41) + 6

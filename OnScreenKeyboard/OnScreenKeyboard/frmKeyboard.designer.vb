@@ -248,7 +248,9 @@ Partial Class frmKeyboard
         '
         'SplitContainer1
         '
-        Me.SplitContainer1.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Left), System.Windows.Forms.AnchorStyles)
+        Me.SplitContainer1.Anchor = CType((((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Bottom) _
+                    Or System.Windows.Forms.AnchorStyles.Left) _
+                    Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.SplitContainer1.Location = New System.Drawing.Point(7, 60)
         Me.SplitContainer1.Name = "SplitContainer1"
         '
@@ -1959,7 +1961,7 @@ Partial Class frmKeyboard
         Me.sbRPeriod.ButtonTextAlign = System.Drawing.ContentAlignment.TopCenter
         Me.sbRPeriod.ButtonTextHeight = -1
         Me.sbRPeriod.Data = "."
-        Me.sbRPeriod.Data2 = "."
+        Me.sbRPeriod.Data2 = "DEL"
         Me.sbRPeriod.Location = New System.Drawing.Point(210, 266)
         Me.sbRPeriod.Name = "sbRPeriod"
         Me.sbRPeriod.Size = New System.Drawing.Size(51, 64)
@@ -1992,7 +1994,7 @@ Partial Class frmKeyboard
         Me.sbR0.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.sbR0.ButtonTextHeight = -1
         Me.sbR0.Data = "0"
-        Me.sbR0.Data2 = "INSERT"
+        Me.sbR0.Data2 = "INS"
         Me.sbR0.Location = New System.Drawing.Point(3, 406)
         Me.sbR0.Name = "sbR0"
         Me.sbR0.Size = New System.Drawing.Size(133, 64)
@@ -2024,7 +2026,7 @@ Partial Class frmKeyboard
         Me.sbR2.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.sbR2.ButtonTextHeight = -1
         Me.sbR2.Data = "2"
-        Me.sbR2.Data2 = "DWN"
+        Me.sbR2.Data2 = "DOWN"
         Me.sbR2.Location = New System.Drawing.Point(72, 336)
         Me.sbR2.Name = "sbR2"
         Me.sbR2.Size = New System.Drawing.Size(64, 64)
@@ -2056,7 +2058,7 @@ Partial Class frmKeyboard
         Me.sbR6.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.sbR6.ButtonTextHeight = -1
         Me.sbR6.Data = "6"
-        Me.sbR6.Data2 = "RIGT"
+        Me.sbR6.Data2 = "RIGHT"
         Me.sbR6.Location = New System.Drawing.Point(141, 266)
         Me.sbR6.Name = "sbR6"
         Me.sbR6.Size = New System.Drawing.Size(64, 64)
@@ -2072,7 +2074,7 @@ Partial Class frmKeyboard
         Me.sbR5.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.sbR5.ButtonTextHeight = -1
         Me.sbR5.Data = "5"
-        Me.sbR5.Data2 = "5"
+        Me.sbR5.Data2 = ""
         Me.sbR5.Location = New System.Drawing.Point(72, 266)
         Me.sbR5.Name = "sbR5"
         Me.sbR5.Size = New System.Drawing.Size(64, 64)
@@ -2136,7 +2138,7 @@ Partial Class frmKeyboard
         Me.sbR8.ButtonTextAlign = System.Drawing.ContentAlignment.MiddleCenter
         Me.sbR8.ButtonTextHeight = -1
         Me.sbR8.Data = "8"
-        Me.sbR8.Data2 = "'UP'"
+        Me.sbR8.Data2 = "UP"
         Me.sbR8.Location = New System.Drawing.Point(72, 196)
         Me.sbR8.Name = "sbR8"
         Me.sbR8.Size = New System.Drawing.Size(64, 64)

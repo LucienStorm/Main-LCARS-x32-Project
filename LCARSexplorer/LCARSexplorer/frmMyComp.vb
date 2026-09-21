@@ -31,6 +31,7 @@ Public Class frmMyComp
     Dim WithEvents clipListener As New ClipboardListener(Me)
     Dim networkScanBusy As Boolean = False
     Dim cachedSmbHosts As New List(Of SmbDiscoveredHost)()
+    Private networkScanStartedOnce As Boolean = False
 
 #End Region
 
@@ -523,7 +524,7 @@ Public Class frmMyComp
         If cachedSmbHosts.Count = 0 Then
             Dim emptyHost As New LCComplexButton()
             emptyHost.HoldDraw = True
-            emptyHost.Text = "(none found — tap SCAN above)"
+            emptyHost.Text = If(networkScanBusy OrElse Not networkScanStartedOnce, "(scanning…)", "(none found — tap SCAN above)")
             emptyHost.SideText = "--"
             emptyHost.Color = LCARS.LCARScolorStyles.FunctionUnavailable
             emptyHost.Clickable = False
@@ -534,8 +535,16 @@ Public Class frmMyComp
                 Dim hostBtn As New LCComplexButton()
                 hostBtn.HoldDraw = True
                 hostBtn.Text = host.DisplayText()
-                hostBtn.Data = "\\" & If((String.IsNullOrEmpty(host.Hostname) OrElse host.Hostname.Trim().Length = 0), host.IpAddress, host.Hostname)
-                hostBtn.SideText = "SMB"
+                Dim hostTarget As String
+                If host.IsLocal Then
+                    hostTarget = Environment.MachineName
+                ElseIf Not String.IsNullOrEmpty(host.Hostname) AndAlso host.Hostname.Trim().Length > 0 Then
+                    hostTarget = host.Hostname.Trim()
+                Else
+                    hostTarget = host.IpAddress
+                End If
+                hostBtn.Data = "\\" & hostTarget
+                hostBtn.SideText = If(host.IsLocal, "LOCAL", "SMB")
                 hostBtn.Color = LCARS.LCARScolorStyles.NavigationFunction
                 hostBtn.Beeping = beeping
                 hostBtn.HoldDraw = False
@@ -545,6 +554,11 @@ Public Class frmMyComp
                 associateClickHandler(hostBtn, AddressOf networkHost_Click)
                 gridMyComp.Add(hostBtn)
             Next
+        End If
+
+        If Not networkScanStartedOnce Then
+            networkScanStartedOnce = True
+            BeginInvoke(New MethodInvoker(AddressOf BeginNetworkScan))
         End If
     End Sub
 
@@ -563,13 +577,13 @@ Public Class frmMyComp
         networkScanBusy = True
         gridMyComp.Text = "NETWORK PLACES (SCANNING…)"
         Dim bw As New System.ComponentModel.BackgroundWorker()
-        AddHandler bw.DoWork, Sub(s, args) args.Result = NetworkPlacesRoot.ScanSmbHosts(350)
+        AddHandler bw.DoWork, Sub(s, args) args.Result = NetworkPlacesRoot.ScanSmbHosts()
         AddHandler bw.RunWorkerCompleted,
             Sub(s, args)
                 networkScanBusy = False
                 If args.Error IsNot Nothing Then
                     MsgBox("Network scan failed: " & args.Error.Message, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "SCAN")
-                Else
+                ElseIf args.Result IsNot Nothing Then
                     cachedSmbHosts = CType(args.Result, List(Of SmbDiscoveredHost))
                 End If
                 If NetworkPlacesRoot.IsNetworkRoot(curPath) Then
@@ -647,6 +661,7 @@ Public Class frmMyComp
         If cancelClick Then Return
         Dim btn As LCComplexButton = DirectCast(sender, LCComplexButton)
         Dim file As String = DirectCast(btn.Data, String)
+        If MediaLauncher.TryOpenInLcarsMedia(file) Then Return
         Try
             Dim myNewProcess As New System.Diagnostics.ProcessStartInfo
             Dim myProcess As Process

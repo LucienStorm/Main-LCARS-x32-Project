@@ -9,6 +9,7 @@ Public Enum MediaKind
     Photo = 1
     Music = 2
     Video = 3
+    Radio = 4
 End Enum
 
 Public Module MediaKindUtil
@@ -18,7 +19,14 @@ Public Module MediaKindUtil
 
     Public Function DetectMediaKind(ByVal path As String) As MediaKind
         If String.IsNullOrEmpty(path) Then Return MediaKind.None
-        Dim ext As String = System.IO.Path.GetExtension(path).ToLowerInvariant()
+        Dim p As String = path.Trim()
+        If p.StartsWith("http://", StringComparison.OrdinalIgnoreCase) OrElse
+           p.StartsWith("https://", StringComparison.OrdinalIgnoreCase) OrElse
+           p.StartsWith("mms://", StringComparison.OrdinalIgnoreCase) OrElse
+           p.StartsWith("rtsp://", StringComparison.OrdinalIgnoreCase) Then
+            Return MediaKind.Radio
+        End If
+        Dim ext As String = System.IO.Path.GetExtension(p).ToLowerInvariant()
         If Array.IndexOf(ImageExts, ext) >= 0 Then Return MediaKind.Photo
         If Array.IndexOf(AudioExts, ext) >= 0 Then Return MediaKind.Music
         If Array.IndexOf(VideoExts, ext) >= 0 Then Return MediaKind.Video
@@ -29,3 +37,4 @@ Public Module MediaKindUtil
         Return DetectMediaKind(path) <> MediaKind.None
     End Function
 End Module
+

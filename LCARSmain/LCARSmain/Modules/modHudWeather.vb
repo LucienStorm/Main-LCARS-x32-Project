@@ -130,6 +130,7 @@ Friend Module modHudWeather
                 SyncWeatherLayout(b)
                 lastWeatherTickLayoutKey(b.ScreenIndex) = GetWeatherLayoutKey(b)
             Next
+            modMediaStrip.Tick()
         End If
 
         If Not IsWeatherEnabled() Then Return
@@ -374,9 +375,11 @@ Friend Module modHudWeather
             If headerClockMode AndAlso headerClock IsNot Nothing AndAlso headerClock.Visible Then
                 ' Beside the large header clock (empty space to its left), same ink as the clock.
                 LayoutView1HeaderWeather(b, weather, weatherLabel, headerClock, container, desiredWidth)
+                modMediaStrip.SyncWithWeather(b, weather, True)
             Else
                 ' Speech-row mode: on fbClock fill, black text like the bar clock glyphs.
                 LayoutView1SpeechRowWeather(weather, weatherLabel, fbClock, desiredWidth)
+                modMediaStrip.SyncWithWeather(b, weather, False)
             End If
 
             modDiagnostics.LogInfo("modHudWeather.SyncView1WeatherLayout",

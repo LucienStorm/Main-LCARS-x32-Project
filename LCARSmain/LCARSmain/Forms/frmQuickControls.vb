@@ -22,6 +22,10 @@ Public Class frmQuickControls
     Private lblRotation As Label
     Private lblNetworkIp As Label
     Private lblNetworkName As Label
+    Private lblNetworkMac As Label
+    Private lblNetworkGateway As Label
+    Private lblNetworkVpn As Label
+    Private lblNetworkSpeed As Label
     Private tmrNetworkInfo As Timer
     Private lstWifi As ListBox
     Private lstBluetooth As ListBox
@@ -42,6 +46,9 @@ Public Class frmQuickControls
     Private btActionBusy As Boolean
     Private tmrVolumePoll As Timer
     Private syncingVolumeSlider As Boolean = False
+    Private syncingMute As Boolean = False
+    Private networkShowCidr As Boolean = True
+    Private lastNetworkSnap As QuickControlsNetworkInfo.Snapshot = Nothing
 
     Public Sub New()
         InitializeQuickControlsUi()
@@ -50,11 +57,11 @@ Public Class frmQuickControls
         RefreshFast()
         AddHandler Me.Shown, AddressOf frmQuickControls_Shown
         tmrVolumePoll = New Timer()
-        tmrVolumePoll.Interval = 1000
+        tmrVolumePoll.Interval = 250
         AddHandler tmrVolumePoll.Tick, AddressOf tmrVolumePoll_Tick
         AddHandler Me.FormClosed, AddressOf frmQuickControls_FormClosed
         tmrNetworkInfo = New Timer()
-        tmrNetworkInfo.Interval = 5000
+        tmrNetworkInfo.Interval = 1000
         AddHandler tmrNetworkInfo.Tick, AddressOf tmrNetworkInfo_Tick
     End Sub
 
@@ -77,12 +84,17 @@ Public Class frmQuickControls
     Private Sub SyncVolumeFromSystem()
         If syncingVolumeSlider OrElse trkVolume Is Nothing Then Return
         Dim current As Integer = QuickControlsAudio.GetVolumePercent()
+        If current < 0 Then Return
         If trkVolume.Value <> current Then
             syncingVolumeSlider = True
-            trkVolume.Value = Math.Max(trkVolume.Minimum, Math.Min(trkVolume.Maximum, current))
-            syncingVolumeSlider = False
+            Try
+                trkVolume.Value = Math.Max(trkVolume.Minimum, Math.Min(trkVolume.Maximum, current))
+            Finally
+                syncingVolumeSlider = False
+            End Try
             QuickControlsAudio.LogVolumeIfChanged(current, "notify")
         End If
+        If syncingMute OrElse sbMute Is Nothing Then Return
         Dim muted As Boolean = QuickControlsAudio.GetMute()
         Dim muteText As String = If(muted, "UNMUTE", "MUTE")
         If sbMute.ButtonText <> muteText Then
@@ -98,6 +110,7 @@ Public Class frmQuickControls
     Private Sub frmQuickControls_Shown(ByVal sender As Object, ByVal e As EventArgs)
         AddHandler QuickControlsAudio.VolumeChanged, AddressOf QuickControlsAudio_VolumeChanged
         QuickControlsAudio.AddVolumeListener()
+        tmrVolumePoll.Interval = 250
         tmrVolumePoll.Start()
         SyncVolumeFromSystem()
         RefreshNetworkInfo()
@@ -110,15 +123,86 @@ Public Class frmQuickControls
     End Sub
 
     ''' <summary>
-    ''' Shows primary IPv4 and current network name under Rotation Lock.
+    ''' Shows IP, SSID/adapter, MAC, gateway/CIDR, VPN, and live RX/TX under Rotation Lock.
+    ''' Tap the gateway line to switch CIDR vs Gateway/Subnet mask.
     ''' </summary>
     Private Sub RefreshNetworkInfo()
-        If lblNetworkIp Is Nothing OrElse lblNetworkName Is Nothing Then Return
-        Dim ip As String = QuickControlsNetworkInfo.GetPrimaryIPv4()
-        Dim netName As String = QuickControlsNetworkInfo.GetCurrentNetworkName()
-        lblNetworkIp.Text = "IP  " & If(String.IsNullOrEmpty(ip), "(none)", ip)
-        lblNetworkName.Text = "NET  " & If(String.IsNullOrEmpty(netName), "(unknown)", netName)
+        If lblNetworkIp Is Nothing Then Return
+        Dim snap As QuickControlsNetworkInfo.Snapshot = QuickControlsNetworkInfo.GetSnapshot()
+        lastNetworkSnap = snap
+        ApplyNetworkAddressLabels(snap)
+        If lblNetworkName IsNot Nothing Then
+            lblNetworkName.Text = "NET  " & If(String.IsNullOrEmpty(snap.AdapterOrSsid), "(unknown)", snap.AdapterOrSsid)
+        End If
+        If lblNetworkMac IsNot Nothing Then
+            lblNetworkMac.Text = "MAC  " & If(String.IsNullOrEmpty(snap.Mac), "(n/a)", snap.Mac)
+        End If
+        If lblNetworkVpn IsNot Nothing Then
+            lblNetworkVpn.Text = "VPN  " & If(String.IsNullOrEmpty(snap.Vpn), "OFF", snap.Vpn)
+        End If
+        If lblNetworkSpeed IsNot Nothing Then
+            lblNetworkSpeed.Text = "RX  " & FormatBytesPerSec(snap.RxBytesPerSec) & "  TX  " & FormatBytesPerSec(snap.TxBytesPerSec)
+        End If
     End Sub
+
+    Private Sub ApplyNetworkAddressLabels(ByVal snap As QuickControlsNetworkInfo.Snapshot)
+        If snap Is Nothing Then Return
+        Dim ip As String = If(String.IsNullOrEmpty(snap.Ip), "(none)", snap.Ip)
+        Dim gw As String = If(String.IsNullOrEmpty(snap.Gateway), "(n/a)", snap.Gateway)
+        Dim mask As String = snap.SubnetMask
+        If String.IsNullOrEmpty(mask) Then
+            mask = QuickControlsNetworkInfo.MaskFromCidrPrefix(snap.CidrPrefix)
+        End If
+        If networkShowCidr Then
+            Dim cidrIp As String = ip
+            If ip <> "(none)" AndAlso Not String.IsNullOrEmpty(snap.CidrPrefix) Then cidrIp = ip & snap.CidrPrefix
+            lblNetworkIp.Text = "IP  " & cidrIp
+            If lblNetworkGateway IsNot Nothing Then
+                ' Single line — CIDR already on the IP row; keep GW short so it fits.
+                lblNetworkGateway.Height = 18
+                lblNetworkGateway.Text = "GW  " & gw
+            End If
+        Else
+            lblNetworkIp.Text = "IP  " & ip
+            If lblNetworkGateway IsNot Nothing Then
+                If String.IsNullOrEmpty(mask) Then mask = "(n/a)"
+                ' Two lines: full "MASK 255.x.x.x" does not fit beside GW in this column.
+                lblNetworkGateway.Height = 36
+                lblNetworkGateway.Text = "GW  " & gw & vbCrLf & "MASK  " & mask
+            End If
+        End If
+        LayoutNetworkInfoRows()
+    End Sub
+
+    ''' <summary>
+    ''' Keeps VPN/speed rows clear of the two-line gateway/mask block.
+    ''' </summary>
+    Private Sub LayoutNetworkInfoRows()
+        If lblNetworkGateway Is Nothing Then Return
+        Dim belowGateway As Integer = lblNetworkGateway.Bottom + 2
+        If lblNetworkVpn IsNot Nothing Then
+            lblNetworkVpn.Top = belowGateway
+            belowGateway = lblNetworkVpn.Bottom + 2
+        End If
+        If lblNetworkSpeed IsNot Nothing Then
+            lblNetworkSpeed.Top = belowGateway
+        End If
+    End Sub
+
+    Private Sub lblNetworkGateway_Click(ByVal sender As Object, ByVal e As EventArgs)
+        networkShowCidr = Not networkShowCidr
+        If lastNetworkSnap IsNot Nothing Then
+            ApplyNetworkAddressLabels(lastNetworkSnap)
+        Else
+            RefreshNetworkInfo()
+        End If
+    End Sub
+
+    Private Function FormatBytesPerSec(ByVal bytesPerSec As Long) As String
+        If bytesPerSec < 1024 Then Return bytesPerSec.ToString() & " B/s"
+        If bytesPerSec < 1024L * 1024L Then Return (bytesPerSec / 1024.0R).ToString("0.0") & " KB/s"
+        Return (bytesPerSec / (1024.0R * 1024.0R)).ToString("0.00") & " MB/s"
+    End Function
 
     Private Sub InitializeQuickControlsUi()
         Me.Text = ""
@@ -154,14 +238,28 @@ Public Class frmQuickControls
 
         lblBattery = MakeLabel("BATTERY / POWER", xLeft, y + 136)
         lblBatteryDetail = MakeWrappedLabel(xLeft, y + 154, ctrlW)
-        sbPowerCycle = MakeButton("CYCLE PLAN", xLeft, y + 182, ctrlW)
+        lblBatteryDetail.Height = 36
+        ' Keep CYCLE PLAN clear of wrapped battery text (was overlapping at y+182).
+        sbPowerCycle = MakeButton("CYCLE PLAN", xLeft, y + 198, ctrlW)
 
-        lblRotation = MakeLabel("ROTATION LOCK", xLeft, y + 222)
-        sbRotation = MakeButton("TOGGLE", xLeft, y + 244, ctrlW)
-        lblNetworkIp = MakeWrappedLabel(xLeft, y + 278, ctrlW)
-        lblNetworkIp.Height = 20
-        lblNetworkName = MakeWrappedLabel(xLeft, y + 298, ctrlW)
-        lblNetworkName.Height = 36
+        lblRotation = MakeLabel("ROTATION LOCK", xLeft, y + 236)
+        sbRotation = MakeButton("TOGGLE", xLeft, y + 258, ctrlW)
+        lblNetworkIp = MakeWrappedLabel(xLeft, y + 292, ctrlW)
+        lblNetworkIp.Height = 18
+        lblNetworkName = MakeWrappedLabel(xLeft, y + 310, ctrlW)
+        lblNetworkName.Height = 18
+        lblNetworkMac = MakeWrappedLabel(xLeft, y + 328, ctrlW)
+        lblNetworkMac.Height = 18
+        lblNetworkGateway = MakeWrappedLabel(xLeft, y + 346, ctrlW)
+        lblNetworkGateway.Height = 18
+        lblNetworkGateway.Cursor = Cursors.Hand
+        AddHandler lblNetworkGateway.Click, AddressOf lblNetworkGateway_Click
+        lblNetworkIp.Cursor = Cursors.Hand
+        AddHandler lblNetworkIp.Click, AddressOf lblNetworkGateway_Click
+        lblNetworkVpn = MakeWrappedLabel(xLeft, y + 364, ctrlW)
+        lblNetworkVpn.Height = 18
+        lblNetworkSpeed = MakeWrappedLabel(xLeft, y + 382, ctrlW)
+        lblNetworkSpeed.Height = 18
 
         lblWifiStatus = MakeLabel("WI-FI", xRight, y)
         sbWifiOn = MakeButton("RADIO", xRight, y + 28, btnThird)
@@ -180,6 +278,7 @@ Public Class frmQuickControls
         lstBluetooth = MakeListBox(xRight, y + 342, listW, 100)
 
         sbClose = MakeButton("CLOSE", xRight + listW - 96, 510, 96)
+        sbClose.Color = LCARS.LCARScolorStyles.FunctionOffline
         AddHandler sbClose.Click, Sub() Me.Close()
         AddHandler sbMute.Click, AddressOf sbMute_Click
         AddHandler sbWifiOn.Click, AddressOf sbWifiOn_Click
@@ -245,6 +344,7 @@ Public Class frmQuickControls
         sb.Color = LCARS.LCARScolorStyles.NavigationFunction
         sb.Location = New Point(x, y)
         sb.Size = New Size(w, 28)
+        sb.Beeping = True
         Me.Controls.Add(sb)
         Return sb
     End Function
@@ -306,9 +406,23 @@ Public Class frmQuickControls
     ''' Instant UI state — no Wi-Fi scan or Bluetooth enumeration.
     ''' </summary>
     Private Sub RefreshFast()
-        trkVolume.Value = Math.Max(0, Math.Min(100, QuickControlsAudio.GetVolumePercent()))
-        sbMute.ButtonText = If(QuickControlsAudio.GetMute(), "UNMUTE", "MUTE")
-        sbMute.Text = sbMute.ButtonText
+        syncingVolumeSlider = True
+        Try
+            Dim volPct As Integer = QuickControlsAudio.GetVolumePercent()
+            If volPct >= 0 Then
+                trkVolume.Value = Math.Max(0, Math.Min(100, volPct))
+                QuickControlsAudio.LogVolumeIfChanged(volPct, "open")
+            End If
+        Finally
+            syncingVolumeSlider = False
+        End Try
+        syncingMute = True
+        Try
+            sbMute.ButtonText = If(QuickControlsAudio.GetMute(), "UNMUTE", "MUTE")
+            sbMute.Text = sbMute.ButtonText
+        Finally
+            syncingMute = False
+        End Try
 
         trkBrightness.Value = Math.Max(0, Math.Min(100, QuickControlsBrightness.GetBrightnessPercent()))
         UpdateBatteryDisplay()
@@ -382,9 +496,19 @@ Public Class frmQuickControls
     End Sub
 
     Private Sub sbMute_Click(ByVal sender As Object, ByVal e As EventArgs)
-        QuickControlsAudio.SetMute(Not QuickControlsAudio.GetMute())
-        sbMute.ButtonText = If(QuickControlsAudio.GetMute(), "UNMUTE", "MUTE")
+        If syncingMute Then Return
+        syncingMute = True
+        Dim wantMute As Boolean = Not QuickControlsAudio.GetMute()
+        Dim ok As Boolean = QuickControlsAudio.SetMute(wantMute)
+        Dim muted As Boolean = QuickControlsAudio.GetMute()
+        sbMute.ButtonText = If(muted, "UNMUTE", "MUTE")
         sbMute.Text = sbMute.ButtonText
+        If Not ok OrElse muted <> wantMute Then
+            lblVolume.Text = "VOLUME — mute failed"
+        Else
+            lblVolume.Text = "VOLUME"
+        End If
+        syncingMute = False
     End Sub
 
     Private Sub sbWifiOn_Click(ByVal sender As Object, ByVal e As EventArgs)
@@ -408,14 +532,66 @@ Public Class frmQuickControls
         End If
         Dim net As QuickControlsWifi.WifiNetwork = CType(lstWifi.SelectedItem, QuickControlsWifi.WifiNetwork)
         Dim pwd As String = txtWifiPassword.Text
-        Dim result As String = QuickControlsWifi.Connect(net.SSID, pwd)
+        Dim result As String = QuickControlsWifi.Connect(net.SSID, pwd, net.Auth)
+        If result.StartsWith("NEED_PASSWORD:", StringComparison.OrdinalIgnoreCase) Then
+            Dim prompted As String = Interaction.InputBox( _
+                "Password required for """ & net.SSID & """." & vbCrLf & _
+                "Enter the Wi-Fi passphrase (WPA2):", _
+                "Quick Controls — Wi-Fi", _
+                pwd)
+            If String.IsNullOrEmpty(prompted) Then
+                lblWifiStatus.Text = "WI-FI — password required"
+                txtWifiPassword.Focus()
+                Return
+            End If
+            txtWifiPassword.Text = prompted
+            result = QuickControlsWifi.Connect(net.SSID, prompted, net.Auth)
+        End If
+        lblWifiStatus.Text = "WI-FI — " & FirstStatusLine(result)
         MessageBox.Show("Connect result:" & vbCrLf & result, "Quick Controls", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        RefreshNetworkInfo()
     End Sub
 
+    Private Function FirstStatusLine(ByVal text As String) As String
+        If text Is Nothing Then Return ""
+        For Each line As String In text.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries)
+            Dim t As String = line.Trim()
+            If t <> "" Then Return t
+        Next
+        Return text.Trim()
+    End Function
+
     Private Sub sbBtOn_Click(ByVal sender As Object, ByVal e As EventArgs)
-        QuickControlsBluetooth.SetBluetoothOn(Not QuickControlsBluetooth.IsBluetoothOn())
-        sbBtOn.ButtonText = If(QuickControlsBluetooth.IsBluetoothOn(), "BT ON", "BT OFF")
-        sbBtOn.Text = sbBtOn.ButtonText
+        Dim wantOn As Boolean = Not QuickControlsBluetooth.IsBluetoothOn()
+        lblBtStatus.Text = "BLUETOOTH — " & If(wantOn, "enabling…", "disabling…")
+        Dim worker As New System.ComponentModel.BackgroundWorker()
+        AddHandler worker.DoWork, Sub(s As Object, args As System.ComponentModel.DoWorkEventArgs)
+                                      Dim status As String = QuickControlsBluetooth.SetBluetoothOn(wantOn)
+                                      Dim nowOn As Boolean = QuickControlsBluetooth.IsBluetoothOn()
+                                      args.Result = New Object() {status, nowOn}
+                                  End Sub
+        AddHandler worker.RunWorkerCompleted, Sub(s As Object, args As System.ComponentModel.RunWorkerCompletedEventArgs)
+                                                  If Me.IsDisposed Then Return
+                                                  If args.Error IsNot Nothing OrElse args.Result Is Nothing Then
+                                                      lblBtStatus.Text = "BLUETOOTH — radio failed"
+                                                      Return
+                                                  End If
+                                                  Dim parts() As Object = CType(args.Result, Object())
+                                                  Dim status As String = CStr(parts(0))
+                                                  Dim nowOn As Boolean = CBool(parts(1))
+                                                  Dim ok As Boolean = status.Trim().Equals("OK", StringComparison.OrdinalIgnoreCase)
+                                                  If ok Then
+                                                      sbBtOn.ButtonText = If(nowOn, "BT ON", "BT OFF")
+                                                      sbBtOn.Text = sbBtOn.ButtonText
+                                                      lblBtStatus.Text = "BLUETOOTH — " & If(nowOn, "ON", "OFF")
+                                                  Else
+                                                      ' Do not flip the radio button when access was denied.
+                                                      sbBtOn.ButtonText = If(QuickControlsBluetooth.IsBluetoothOn(), "BT ON", "BT OFF")
+                                                      sbBtOn.Text = sbBtOn.ButtonText
+                                                      lblBtStatus.Text = "BLUETOOTH — " & status
+                                                  End If
+                                              End Sub
+        worker.RunWorkerAsync()
     End Sub
 
     Private Sub sbBtRefresh_Click(ByVal sender As Object, ByVal e As EventArgs)
@@ -558,8 +734,26 @@ Public Class frmQuickControls
     End Sub
 
     Private Sub sbPowerCycle_Click(ByVal sender As Object, ByVal e As EventArgs)
-        QuickControlsPower.CyclePowerPlan()
+        Dim result As String = QuickControlsPower.CyclePowerPlan()
         UpdateBatteryDisplay()
         CommonScreen.RefreshPowerPlanDisplay()
+        If result IsNot Nothing AndAlso result.StartsWith("OK:", StringComparison.OrdinalIgnoreCase) Then
+            Dim planName As String = result.Substring(3).Trim()
+            sbPowerCycle.ButtonText = planName.ToUpperInvariant()
+            sbPowerCycle.Text = sbPowerCycle.ButtonText
+            lblBatteryDetail.Text = QuickControlsPower.GetBatterySummary()
+            Dim reset As New Timer()
+            reset.Interval = 1600
+            AddHandler reset.Tick, Sub(s As Object, ev As EventArgs)
+                                       reset.Stop()
+                                       reset.Dispose()
+                                       If Me.IsDisposed OrElse sbPowerCycle Is Nothing Then Return
+                                       sbPowerCycle.ButtonText = "CYCLE PLAN"
+                                       sbPowerCycle.Text = "CYCLE PLAN"
+                                   End Sub
+            reset.Start()
+        Else
+            lblBatteryDetail.Text = If(String.IsNullOrEmpty(result), "powercfg failed", result)
+        End If
     End Sub
 End Class

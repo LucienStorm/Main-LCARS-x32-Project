@@ -51,6 +51,24 @@ Public Module modShellFallback
         End Try
     End Function
 
+    ''' <summary>
+    ''' Only block shell startup when an installer is actually running and the flag
+    ''' is fresh. Stale flags after a hard reboot must not leave a black desktop.
+    ''' </summary>
+    Public Function ShouldHonorUpdateInProgressBlock() As Boolean
+        Try
+            If Not IsUpdateInProgress() Then Return False
+            Dim flagPath As String = UpdateInProgressFlagPath()
+            Dim age As TimeSpan = DateTime.UtcNow - File.GetLastWriteTimeUtc(flagPath)
+            If age.TotalMinutes > 15 Then Return False
+            If Process.GetProcessesByName("runInstallScript").Length > 0 Then Return True
+            ' Flag exists, fresh, but no installer — treat as stale (reboot mid-update).
+            Return False
+        Catch
+            Return False
+        End Try
+    End Function
+
     Public Sub ClearUpdateInProgress()
         Try
             Dim flagPath As String = UpdateInProgressFlagPath()

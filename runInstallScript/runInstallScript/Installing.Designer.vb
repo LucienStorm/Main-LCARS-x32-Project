@@ -29,7 +29,18 @@ Partial Class Installing
         Me.lstStatus = New System.Windows.Forms.ListBox()
         Me.sbCancel = New System.Windows.Forms.Button()
         Me.sbContinue = New System.Windows.Forms.Button()
+        Me.pnlFinishMenu = New System.Windows.Forms.Panel()
+        Me.lblFinishMenuTitle = New System.Windows.Forms.Label()
+        Me.btnFinished = New System.Windows.Forms.Button()
+        Me.btnHibernate = New System.Windows.Forms.Button()
+        Me.btnSuspend = New System.Windows.Forms.Button()
+        Me.btnLock = New System.Windows.Forms.Button()
+        Me.btnLogOff = New System.Windows.Forms.Button()
+        Me.btnRestart = New System.Windows.Forms.Button()
+        Me.btnShutDown = New System.Windows.Forms.Button()
+        Me.btnCloseLcars = New System.Windows.Forms.Button()
         Me.pnlInstalling.SuspendLayout()
+        Me.pnlFinishMenu.SuspendLayout()
         Me.SuspendLayout()
         '
         'lblTitle
@@ -135,12 +146,147 @@ Partial Class Installing
         Me.sbContinue.Text = "CONTINUE"
         Me.sbContinue.UseVisualStyleBackColor = False
         '
+        'pnlFinishMenu
+        '
+        Me.pnlFinishMenu.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.pnlFinishMenu.BackColor = System.Drawing.Color.Black
+        Me.pnlFinishMenu.BorderStyle = System.Windows.Forms.BorderStyle.None
+        Me.pnlFinishMenu.Controls.Add(Me.lblFinishMenuTitle)
+        Me.pnlFinishMenu.Controls.Add(Me.btnHibernate)
+        Me.pnlFinishMenu.Controls.Add(Me.btnSuspend)
+        Me.pnlFinishMenu.Controls.Add(Me.btnLock)
+        Me.pnlFinishMenu.Controls.Add(Me.btnLogOff)
+        Me.pnlFinishMenu.Controls.Add(Me.btnRestart)
+        Me.pnlFinishMenu.Controls.Add(Me.btnShutDown)
+        Me.pnlFinishMenu.Controls.Add(Me.btnCloseLcars)
+        Me.pnlFinishMenu.Controls.Add(Me.btnFinished)
+        Me.pnlFinishMenu.Location = New System.Drawing.Point(280, 340)
+        Me.pnlFinishMenu.Name = "pnlFinishMenu"
+        Me.pnlFinishMenu.Size = New System.Drawing.Size(268, 420)
+        Me.pnlFinishMenu.TabIndex = 10
+        Me.pnlFinishMenu.Visible = False
+        '
+        'lblFinishMenuTitle
+        '
+        Me.lblFinishMenuTitle.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.lblFinishMenuTitle.ForeColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(153, Byte), Integer), CType(CType(0, Byte), Integer))
+        Me.lblFinishMenuTitle.Location = New System.Drawing.Point(28, 28)
+        Me.lblFinishMenuTitle.Name = "lblFinishMenuTitle"
+        Me.lblFinishMenuTitle.Size = New System.Drawing.Size(220, 22)
+        Me.lblFinishMenuTitle.TabIndex = 0
+        Me.lblFinishMenuTitle.Text = "SYSTEM OPTIONS"
+        '
+        'btnFinished — primary / default (taller LCARS choice)
+        '
+        Me.btnFinished.BackColor = System.Drawing.Color.FromArgb(CType(CType(51, Byte), Integer), CType(CType(102, Byte), Integer), CType(CType(204, Byte), Integer))
+        Me.btnFinished.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnFinished.Font = New System.Drawing.Font("Segoe UI", 11.0!, System.Drawing.FontStyle.Bold)
+        Me.btnFinished.ForeColor = System.Drawing.Color.Black
+        Me.btnFinished.Location = New System.Drawing.Point(28, 340)
+        Me.btnFinished.Name = "btnFinished"
+        Me.btnFinished.Size = New System.Drawing.Size(220, 64)
+        Me.btnFinished.TabIndex = 8
+        Me.btnFinished.Text = ""
+        Me.btnFinished.UseVisualStyleBackColor = False
+        '
+        'btnHibernate
+        '
+        Me.btnHibernate.BackColor = System.Drawing.Color.FromArgb(CType(CType(153, Byte), Integer), CType(CType(102, Byte), Integer), CType(CType(204, Byte), Integer))
+        Me.btnHibernate.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnHibernate.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.btnHibernate.ForeColor = System.Drawing.Color.Black
+        Me.btnHibernate.Location = New System.Drawing.Point(10, 32)
+        Me.btnHibernate.Name = "btnHibernate"
+        Me.btnHibernate.Size = New System.Drawing.Size(196, 32)
+        Me.btnHibernate.TabIndex = 1
+        Me.btnHibernate.Text = "HIBERNATE"
+        Me.btnHibernate.UseVisualStyleBackColor = False
+        '
+        'btnSuspend
+        '
+        Me.btnSuspend.BackColor = System.Drawing.Color.FromArgb(CType(CType(153, Byte), Integer), CType(CType(102, Byte), Integer), CType(CType(204, Byte), Integer))
+        Me.btnSuspend.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnSuspend.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.btnSuspend.ForeColor = System.Drawing.Color.Black
+        Me.btnSuspend.Location = New System.Drawing.Point(10, 70)
+        Me.btnSuspend.Name = "btnSuspend"
+        Me.btnSuspend.Size = New System.Drawing.Size(196, 32)
+        Me.btnSuspend.TabIndex = 2
+        Me.btnSuspend.Text = "SUSPEND"
+        Me.btnSuspend.UseVisualStyleBackColor = False
+        '
+        'btnLock
+        '
+        Me.btnLock.BackColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(153, Byte), Integer), CType(CType(0, Byte), Integer))
+        Me.btnLock.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnLock.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.btnLock.ForeColor = System.Drawing.Color.Black
+        Me.btnLock.Location = New System.Drawing.Point(10, 108)
+        Me.btnLock.Name = "btnLock"
+        Me.btnLock.Size = New System.Drawing.Size(196, 32)
+        Me.btnLock.TabIndex = 3
+        Me.btnLock.Text = "LOCK"
+        Me.btnLock.UseVisualStyleBackColor = False
+        '
+        'btnLogOff
+        '
+        Me.btnLogOff.BackColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(153, Byte), Integer), CType(CType(0, Byte), Integer))
+        Me.btnLogOff.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnLogOff.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.btnLogOff.ForeColor = System.Drawing.Color.Black
+        Me.btnLogOff.Location = New System.Drawing.Point(10, 146)
+        Me.btnLogOff.Name = "btnLogOff"
+        Me.btnLogOff.Size = New System.Drawing.Size(196, 32)
+        Me.btnLogOff.TabIndex = 4
+        Me.btnLogOff.Text = "LOG OFF"
+        Me.btnLogOff.UseVisualStyleBackColor = False
+        '
+        'btnRestart
+        '
+        Me.btnRestart.BackColor = System.Drawing.Color.FromArgb(CType(CType(204, Byte), Integer), CType(CType(51, Byte), Integer), CType(CType(51, Byte), Integer))
+        Me.btnRestart.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnRestart.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.btnRestart.ForeColor = System.Drawing.Color.Black
+        Me.btnRestart.Location = New System.Drawing.Point(10, 184)
+        Me.btnRestart.Name = "btnRestart"
+        Me.btnRestart.Size = New System.Drawing.Size(196, 32)
+        Me.btnRestart.TabIndex = 5
+        Me.btnRestart.Text = "RESTART"
+        Me.btnRestart.UseVisualStyleBackColor = False
+        '
+        'btnShutDown
+        '
+        Me.btnShutDown.BackColor = System.Drawing.Color.FromArgb(CType(CType(204, Byte), Integer), CType(CType(51, Byte), Integer), CType(CType(51, Byte), Integer))
+        Me.btnShutDown.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnShutDown.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.btnShutDown.ForeColor = System.Drawing.Color.Black
+        Me.btnShutDown.Location = New System.Drawing.Point(10, 222)
+        Me.btnShutDown.Name = "btnShutDown"
+        Me.btnShutDown.Size = New System.Drawing.Size(196, 32)
+        Me.btnShutDown.TabIndex = 6
+        Me.btnShutDown.Text = "SHUT DOWN"
+        Me.btnShutDown.UseVisualStyleBackColor = False
+        '
+        'btnCloseLcars
+        '
+        Me.btnCloseLcars.BackColor = System.Drawing.Color.FromArgb(CType(CType(120, Byte), Integer), CType(CType(0, Byte), Integer), CType(CType(0, Byte), Integer))
+        Me.btnCloseLcars.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnCloseLcars.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.btnCloseLcars.ForeColor = System.Drawing.Color.Orange
+        Me.btnCloseLcars.Location = New System.Drawing.Point(10, 260)
+        Me.btnCloseLcars.Name = "btnCloseLcars"
+        Me.btnCloseLcars.Size = New System.Drawing.Size(196, 32)
+        Me.btnCloseLcars.TabIndex = 7
+        Me.btnCloseLcars.Text = "CLOSE LCARS"
+        Me.btnCloseLcars.UseVisualStyleBackColor = False
+        '
         'Installing
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(7.0!, 15.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(548, 400)
+        Me.Controls.Add(Me.pnlFinishMenu)
         Me.Controls.Add(Me.pnlInstalling)
         Me.Controls.Add(Me.sbCancel)
         Me.Controls.Add(Me.sbContinue)
@@ -154,6 +300,7 @@ Partial Class Installing
         Me.Text = "Installing Updates"
         Me.TopMost = True
         Me.pnlInstalling.ResumeLayout(False)
+        Me.pnlFinishMenu.ResumeLayout(False)
         Me.ResumeLayout(False)
 
     End Sub
@@ -165,5 +312,15 @@ Partial Class Installing
     Friend WithEvents Progress As System.Windows.Forms.ProgressBar
     Friend WithEvents lblProgress As System.Windows.Forms.Label
     Friend WithEvents lstStatus As System.Windows.Forms.ListBox
+    Friend WithEvents pnlFinishMenu As System.Windows.Forms.Panel
+    Friend WithEvents lblFinishMenuTitle As System.Windows.Forms.Label
+    Friend WithEvents btnFinished As System.Windows.Forms.Button
+    Friend WithEvents btnHibernate As System.Windows.Forms.Button
+    Friend WithEvents btnSuspend As System.Windows.Forms.Button
+    Friend WithEvents btnLock As System.Windows.Forms.Button
+    Friend WithEvents btnLogOff As System.Windows.Forms.Button
+    Friend WithEvents btnRestart As System.Windows.Forms.Button
+    Friend WithEvents btnShutDown As System.Windows.Forms.Button
+    Friend WithEvents btnCloseLcars As System.Windows.Forms.Button
 
 End Class

@@ -64,11 +64,17 @@ Public Class frmShellPicker
     End Function
 
     ''' <summary>
-    ''' Positions the flyout to the right of the anchor and shows it owned by the parent.
+    ''' Positions the flyout to the left of the anchor (toward the content area) and shows it.
     ''' </summary>
     Public Sub ShowBeside(ByVal owner As Form, ByVal anchor As Control)
-        Dim screenPt As Point = anchor.PointToScreen(New Point(anchor.Width, 0))
-        Location = screenPt
+        Dim anchorTopLeft As Point = anchor.PointToScreen(Point.Empty)
+        Dim x As Integer = anchorTopLeft.X - Me.Width - 4
+        Dim y As Integer = anchorTopLeft.Y
+        ' Keep on-screen if the owner is near the left edge.
+        Dim wa As Rectangle = Screen.FromControl(owner).WorkingArea
+        If x < wa.Left Then x = anchorTopLeft.X + anchor.Width + 4
+        If y + Me.Height > wa.Bottom Then y = Math.Max(wa.Top, wa.Bottom - Me.Height)
+        Location = New Point(x, y)
         Show(owner)
     End Sub
 End Class

@@ -266,7 +266,7 @@ Partial Class frmMainscreen1
         '
         'myPhoto
         '
-        Me.myPhoto.ButtonText = "PHOTO VIEWER"
+        Me.myPhoto.ButtonText = "Media Viewer"
         Me.myPhoto.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.myPhoto.Color = LCARS.LCARScolorStyles.SystemFunction
         Me.myPhoto.FlashInterval = 0
@@ -275,7 +275,7 @@ Partial Class frmMainscreen1
         Me.myPhoto.Size = New System.Drawing.Size(100, 25)
         Me.myPhoto.TabIndex = 62
         Me.myPhoto.Tag = "3"
-        Me.myPhoto.Text = "PHOTO VIEWER"
+        Me.myPhoto.Text = "Media Viewer"
         '
         'ArrowButton1
         '

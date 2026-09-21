@@ -38,6 +38,39 @@ Public Module NetworkAccess
         Return ""
     End Function
 
+    ''' <summary>\\server\share\folder → \\server\share (WNet needs the share, not just the host).</summary>
+    Public Function ShareRootFromUnc(ByVal path As String) As String
+        If String.IsNullOrEmpty(path) Then Return ""
+        Dim p As String = path.Trim()
+        If Not p.StartsWith("\\") Then Return ""
+        Dim rest As String = p.TrimStart("\"c)
+        Dim parts As String() = rest.Split({"\"c}, StringSplitOptions.RemoveEmptyEntries)
+        If parts.Length >= 2 Then Return "\\" & parts(0) & "\" & parts(1)
+        If parts.Length = 1 Then Return "\\" & parts(0)
+        Return p
+    End Function
+
+    ''' <summary>Normalize username: convert / to \, trim, drop leading .\ </summary>
+    Public Function NormalizeUserName(ByVal username As String) As String
+        If String.IsNullOrEmpty(username) Then Return ""
+        Dim u As String = username.Trim().Replace("/"c, "\"c)
+        If u.StartsWith(".\") Then u = u.Substring(2)
+        Return u.TrimEnd("\"c)
+    End Function
+
+    Public Function DescribeConnectError(ByVal code As Integer) As String
+        Select Case code
+            Case 0 : Return "OK"
+            Case 5 : Return "Access denied (5) — wrong user/password, or share permissions."
+            Case 53 : Return "Network path not found (53) — check host name / IP."
+            Case 67 : Return "Network name not found (67) — use \\host\sharename (not just \\host)."
+            Case 86 : Return "Invalid password (86)."
+            Case 1219 : Return "Already connected with different credentials (1219) — disconnect the share in Windows first, then retry."
+            Case 1326 : Return "Logon failure (1326) — try HOST\username or DOMAIN\username."
+            Case Else : Return "WNet error " & code.ToString()
+        End Select
+    End Function
+
     Public Function IsUnauthorizedOrNetworkError(ByVal ex As Exception) As Boolean
         If TypeOf ex Is UnauthorizedAccessException Then Return True
         If TypeOf ex Is IOException Then
@@ -49,12 +82,19 @@ Public Module NetworkAccess
         Return False
     End Function
 
-    Public Function TryConnectWithCredentials(ByVal uncRoot As String, ByVal username As String, ByVal password As String) As Boolean
+    Public Function TryConnectWithCredentials(ByVal uncTarget As String, ByVal username As String, ByVal password As String, ByRef errCode As Integer) As Boolean
+        errCode = -1
+        Dim user As String = NormalizeUserName(username)
         Dim nr As New NETRESOURCE()
         nr.dwType = RESOURCETYPE_DISK
-        nr.lpRemoteName = uncRoot
-        Dim result As Integer = WNetAddConnection2(nr, password, username, CONNECT_TEMPORARY)
-        Return result = 0 OrElse result = 1219 ' already connected
+        nr.lpRemoteName = uncTarget
+        errCode = WNetAddConnection2(nr, password, user, CONNECT_TEMPORARY)
+        Return errCode = 0 OrElse errCode = 1219
+    End Function
+
+    Public Function TryConnectWithCredentials(ByVal uncTarget As String, ByVal username As String, ByVal password As String) As Boolean
+        Dim ignored As Integer = 0
+        Return TryConnectWithCredentials(uncTarget, username, password, ignored)
     End Function
 
     ''' <summary>
@@ -73,14 +113,16 @@ Public Module NetworkAccess
         End Try
 
         Dim host As String = HostFromUncOrPath(path)
+        Dim shareRoot As String = ShareRootFromUnc(path)
+        If String.IsNullOrEmpty(shareRoot) Then shareRoot = If(String.IsNullOrEmpty(host), path, "\\" & host)
+
         Dim store As New NetworkCredentialStore()
         Dim user As String = ""
         Dim pass As String = ""
-        Dim connected As Boolean = False
+        Dim errCode As Integer = 0
 
         If store.TryGet(host, user, pass) Then
-            Dim uncRoot As String = "\\" & host
-            If TryConnectWithCredentials(uncRoot, user, pass) Then
+            If TryConnectWithCredentials(shareRoot, user, pass, errCode) Then
                 Try
                     infos = New DirectoryInfo(path).GetFileSystemInfos()
                     Return True
@@ -90,17 +132,18 @@ Public Module NetworkAccess
         End If
 
         Using dlg As New frmNetworkCredentials(host)
-            dlg.UserName = If(user, "")
+            If Not String.IsNullOrEmpty(user) Then dlg.UserName = user
             If dlg.ShowDialog(owner) <> DialogResult.OK Then
                 Return False
             End If
-            user = dlg.UserName
+            user = NormalizeUserName(dlg.UserName)
             pass = dlg.Password
-            Dim uncRoot As String = "\\" & host
-            If (String.IsNullOrEmpty(host) OrElse host.Trim().Length = 0) Then uncRoot = path
-            connected = TryConnectWithCredentials(uncRoot, user, pass)
+            Dim connected As Boolean = TryConnectWithCredentials(shareRoot, user, pass, errCode)
             If Not connected Then
-                MsgBox("Could not connect with the provided credentials.", MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "Access Denied")
+                MsgBox("Could not connect to " & shareRoot & vbCrLf & DescribeConnectError(errCode) & vbCrLf & vbCrLf &
+                       "Tried user: " & user & vbCrLf &
+                       "Tip: Samba often wants HOST\username (pre-filled). Plain username also works on some shares.",
+                       MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "Access Denied")
                 Return False
             End If
             If dlg.RememberPassword Then

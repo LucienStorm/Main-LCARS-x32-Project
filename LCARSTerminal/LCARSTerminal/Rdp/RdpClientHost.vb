@@ -245,4 +245,68 @@ Public Class RdpClientHost
         End If
         Return "Disconnected (" & discReason.ToString() & ")"
     End Function
+
+    ''' <summary>Focus the RDP surface and inject a typed character from the OSK.</summary>
+    Public Sub InjectChar(ByVal ch As Char)
+        If ch = ChrW(0) Then Return
+        EnsureClientFocus()
+        SendUnicodeChar(ch)
+    End Sub
+
+    ''' <summary>Focus the RDP surface and inject a virtual key from the OSK.</summary>
+    Public Sub InjectVirtualKey(ByVal key As Keys)
+        EnsureClientFocus()
+        SendVirtualKeyStroke(CInt(key) And &HFF)
+    End Sub
+
+    Private Sub EnsureClientFocus()
+        Try
+            If _client IsNot Nothing AndAlso _client.IsHandleCreated Then
+                _client.Focus()
+            Else
+                Me.Focus()
+            End If
+        Catch
+        End Try
+    End Sub
+
+#Region " OSK key injection "
+    Private Const KEYEVENTF_KEYUP As UInteger = &H2UI
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Sub keybd_event(ByVal bVk As Byte, ByVal bScan As Byte, ByVal dwFlags As UInteger, ByVal dwExtraInfo As UIntPtr)
+    End Sub
+
+    <Runtime.InteropServices.DllImport("user32.dll")>
+    Private Shared Function VkKeyScan(ByVal ch As Char) As Short
+    End Function
+
+    Friend Shared Sub SendUnicodeChar(ByVal ch As Char)
+        Dim scan As Short = VkKeyScan(ch)
+        If scan = -1S Then
+            ' No VK mapping — emit as unicode via Alt-less fallback of the raw byte when ASCII.
+            Dim code As Integer = AscW(ch) And &HFF
+            If code <= 0 Then Return
+            SendVirtualKeyStroke(code)
+            Return
+        End If
+        Dim vk As Byte = CByte(scan And &HFFS)
+        Dim shiftState As Integer = (CInt(scan) >> 8) And &HFF
+        If (shiftState And 1) <> 0 Then keybd_event(&H10, 0, 0UI, UIntPtr.Zero) ' Shift
+        If (shiftState And 2) <> 0 Then keybd_event(&H11, 0, 0UI, UIntPtr.Zero) ' Ctrl
+        If (shiftState And 4) <> 0 Then keybd_event(&H12, 0, 0UI, UIntPtr.Zero) ' Alt
+        keybd_event(vk, 0, 0UI, UIntPtr.Zero)
+        keybd_event(vk, 0, KEYEVENTF_KEYUP, UIntPtr.Zero)
+        If (shiftState And 4) <> 0 Then keybd_event(&H12, 0, KEYEVENTF_KEYUP, UIntPtr.Zero)
+        If (shiftState And 2) <> 0 Then keybd_event(&H11, 0, KEYEVENTF_KEYUP, UIntPtr.Zero)
+        If (shiftState And 1) <> 0 Then keybd_event(&H10, 0, KEYEVENTF_KEYUP, UIntPtr.Zero)
+    End Sub
+
+    Friend Shared Sub SendVirtualKeyStroke(ByVal vk As Integer)
+        If vk <= 0 OrElse vk > 255 Then Return
+        Dim b As Byte = CByte(vk And &HFF)
+        keybd_event(b, 0, 0UI, UIntPtr.Zero)
+        keybd_event(b, 0, KEYEVENTF_KEYUP, UIntPtr.Zero)
+    End Sub
+#End Region
 End Class

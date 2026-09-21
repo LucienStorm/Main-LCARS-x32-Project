@@ -92,7 +92,7 @@ Module Program
 
     Private Sub TestCredTargetName()
         Dim id As Guid = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-        Check(RdpCredentialStore.TargetName(id) = "LCARSTerminal/RDP/aaaaaaaabbbbccccddddeeeeeeeeeeee", "cred target")
+        Check(RdpCredentialStore.TargetName(id) = "LCARSTerminal/Remote/aaaaaaaabbbbccccddddeeeeeeeeeeee", "cred target")
     End Sub
 
     Private Sub TestCredRoundTrip()

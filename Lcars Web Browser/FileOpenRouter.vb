@@ -22,7 +22,7 @@ Public Module FileOpenRouter
                 Return "Document"
             Case ".csv", ".xlsx"
                 Return "Sheet"
-            Case ".lcarsink", ".lcarscanvas"
+            Case ".lcarsink", ".lcarscanvas", ".canvas"
                 Return "Canvas"
             Case ""
                 If File.Exists(path) AndAlso IsLikelyTextFile(path) Then Return "Document"

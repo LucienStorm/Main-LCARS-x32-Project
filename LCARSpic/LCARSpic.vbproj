@@ -89,11 +89,15 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Media\ChromeController.vb" />
+    <Compile Include="Media\frmRadioPicker.vb" />
     <Compile Include="Media\MediaKind.vb" />
     <Compile Include="Media\MediaSessionIpc.vb" />
     <Compile Include="Media\MediaTransportControls.vb" />
+    <Compile Include="Media\RadioStations.vb" />
+    <Compile Include="Media\RailScrollPanel.vb" />
     <Compile Include="Media\SlideshowSettings.vb" />
     <Compile Include="Media\VlcPlaybackHost.vb" />
+    <Compile Include="My Project\ApplicationEvents.vb" />
     <Compile Include="frmPic.designer.vb">
       <DependentUpon>frmPic.vb</DependentUpon>
     </Compile>

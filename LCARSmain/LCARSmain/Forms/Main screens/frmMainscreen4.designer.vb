@@ -508,15 +508,15 @@ Partial Class frmMainscreen4
         'myPhoto
         '
         Me.myPhoto.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.myPhoto.ButtonText = "PHOTO VIEWER"
+        Me.myPhoto.ButtonText = "Media Viewer"
         Me.myPhoto.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.myPhoto.Color = LCARS.LCARScolorStyles.SystemFunction
         Me.myPhoto.Location = New System.Drawing.Point(518, 0)
         Me.myPhoto.Name = "myPhoto"
-        Me.myPhoto.Size = New System.Drawing.Size(90, 23)
+        Me.myPhoto.Size = New System.Drawing.Size(110, 23)
         Me.myPhoto.TabIndex = 74
         Me.myPhoto.Tag = "9"
-        Me.myPhoto.Text = "PHOTO VIEWER"
+        Me.myPhoto.Text = "Media Viewer"
         '
         'pnlApps
         '

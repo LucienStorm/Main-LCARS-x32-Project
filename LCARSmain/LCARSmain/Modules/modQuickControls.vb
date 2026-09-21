@@ -345,6 +345,14 @@ Public Module modQuickControls
     ''' Runs a hidden process and returns merged stdout/stderr.
     ''' </summary>
     Friend Function RunCommand(ByVal fileName As String, ByVal arguments As String) As String
+        Dim unusedExit As Integer = 0
+        Return RunCommandEx(fileName, arguments, unusedExit)
+    End Function
+
+    ''' <summary>
+    ''' Runs a hidden process and returns merged stdout/stderr plus the process exit code.
+    ''' </summary>
+    Friend Function RunCommandEx(ByVal fileName As String, ByVal arguments As String, ByRef exitCode As Integer) As String
         Dim psi As New ProcessStartInfo()
         psi.FileName = fileName
         psi.Arguments = arguments
@@ -356,6 +364,7 @@ Public Module modQuickControls
             Dim output As String = proc.StandardOutput.ReadToEnd()
             Dim err As String = proc.StandardError.ReadToEnd()
             proc.WaitForExit()
+            exitCode = proc.ExitCode
             If output = "" Then Return err
             Return output
         End Using
@@ -372,22 +381,26 @@ Public Module modQuickControls
 End Module
 
 ''' <summary>
-''' Master volume via Core Audio COM (fallback-safe).
+''' Master volume via Core Audio (IAudioEndpointVolume). Hardware keys and Mute use the same endpoint.
 ''' </summary>
 Friend Class QuickControlsAudio
     Private Const CLSID_MMDeviceEnumerator As String = "BCDE0395-E52F-467C-8E3D-C4579291692E"
+    Private Const IID_IMMDevice As String = "D666063F-1587-4E43-81F1-B948E807363F"
+    Private Const IID_IMMDeviceEnumerator As String = "A95664D2-9614-4F35-A746-DE8DB63617E6"
     Private Const IID_IAudioEndpointVolume As String = "5CDF2C82-841E-4546-9722-0CF74078229A"
     Private Const IID_IAudioEndpointVolumeCallback As String = "657804FA-D6AD-4496-8A60-352752AF4F89"
-    Private Const VK_VOLUME_MUTE As Integer = &HAD
-    Private Const VK_VOLUME_DOWN As Integer = &HAE
-    Private Const VK_VOLUME_UP As Integer = &HAF
-    Private Const KEYEVENTF_KEYUP As UInteger = &H2
+    Private Const CLSCTX_INPROC_SERVER As Integer = 1
+    Private Const eRender As Integer = 0
+    Private Const eConsole As Integer = 0
+    Private Const eMultimedia As Integer = 1
     Private Const WM_APPCOMMAND As Integer = &H319
     Private Const APPCOMMAND_VOLUME_MUTE As Integer = 8
     Private Const APPCOMMAND_VOLUME_DOWN As Integer = 9
     Private Const APPCOMMAND_VOLUME_UP As Integer = 10
     Private Const HWND_BROADCAST As Integer = &HFFFF
 
+    Private Shared ReadOnly volumeLock As New Object()
+    Private Shared cachedVolume As IAudioEndpointVolume
     Private Shared volumeCallback As EndpointVolumeCallback
     Private Shared volumeCallbackPtr As IntPtr
     Private Shared registeredVolume As IAudioEndpointVolume
@@ -398,17 +411,19 @@ Friend Class QuickControlsAudio
 
     <ComImport(), Guid(IID_IAudioEndpointVolumeCallback), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
     Private Interface IAudioEndpointVolumeCallback
-        Sub OnNotify(ByVal pNotify As IntPtr)
+        <PreserveSig()> Function OnNotify(ByVal pNotify As IntPtr) As Integer
     End Interface
 
+    <ComVisible(True), ClassInterface(ClassInterfaceType.None)>
     Private NotInheritable Class EndpointVolumeCallback
         Implements IAudioEndpointVolumeCallback
 
         Public Event VolumeChanged As EventHandler
 
-        Public Sub OnNotify(ByVal pNotify As IntPtr) Implements IAudioEndpointVolumeCallback.OnNotify
+        Public Function OnNotify(ByVal pNotify As IntPtr) As Integer Implements IAudioEndpointVolumeCallback.OnNotify
             RaiseEvent VolumeChanged(Me, EventArgs.Empty)
-        End Sub
+            Return 0
+        End Function
     End Class
 
     <ComImport(), Guid(IID_IAudioEndpointVolume), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
@@ -424,73 +439,60 @@ Friend Class QuickControlsAudio
         <PreserveSig()> Function SetChannelVolumeLevelScalar(ByVal nChannel As UInteger, ByVal fLevel As Single, ByRef pguidEventContext As Guid) As Integer
         <PreserveSig()> Function GetChannelVolumeLevel(ByVal nChannel As UInteger, <Out()> ByRef pfLevelDB As Single) As Integer
         <PreserveSig()> Function GetChannelVolumeLevelScalar(ByVal nChannel As UInteger, <Out()> ByRef pfLevel As Single) As Integer
-        <PreserveSig()> Function SetMute(ByVal bMute As Boolean, ByRef pguidEventContext As Guid) As Integer
-        <PreserveSig()> Function GetMute(<Out()> ByRef pbMute As Boolean) As Integer
+        ' Win32 BOOL is 4 bytes — use Integer, not Boolean.
+        <PreserveSig()> Function SetMute(ByVal bMute As Integer, ByRef pguidEventContext As Guid) As Integer
+        <PreserveSig()> Function GetMute(<Out()> ByRef pbMute As Integer) As Integer
     End Interface
 
-    <ComImport(), Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
+    <ComImport(), Guid(IID_IMMDeviceEnumerator), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
     Private Interface IMMDeviceEnumerator
         <PreserveSig()> Function EnumAudioEndpoints(ByVal dataFlow As Integer, ByVal dwStateMask As Integer, <Out()> ByRef ppDevices As Object) As Integer
         <PreserveSig()> Function GetDefaultAudioEndpoint(ByVal dataFlow As Integer, ByVal role As Integer, <Out()> ByRef ppDevice As IMMDevice) As Integer
     End Interface
 
-    <ComImport(), Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
+    <ComImport(), Guid(IID_IMMDevice), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
     Private Interface IMMDevice
         <PreserveSig()> Function Activate(ByRef iid As Guid, ByVal dwClsCtx As Integer, ByVal pActivationParams As IntPtr, <Out(), MarshalAs(UnmanagedType.IUnknown)> ByRef ppInterface As Object) As Integer
     End Interface
 
     <DllImport("user32.dll")>
-    Private Shared Sub keybd_event(ByVal bVk As Byte, ByVal bScan As Byte, ByVal dwFlags As UInteger, ByVal dwExtraInfo As UIntPtr)
-    End Sub
-
-    <DllImport("user32.dll")>
     Private Shared Function SendMessage(ByVal hWnd As IntPtr, ByVal msg As Integer, ByVal wParam As IntPtr, ByVal lParam As IntPtr) As IntPtr
     End Function
 
-    <DllImport("winmm.dll")>
-    Private Shared Function waveOutGetVolume(ByVal hwo As IntPtr, ByRef pdwVolume As UInteger) As UInteger
-    End Function
-
-    <DllImport("winmm.dll")>
-    Private Shared Function waveOutSetVolume(ByVal hwo As IntPtr, ByVal dwVolume As UInteger) As UInteger
-    End Function
-
-    Private Shared Function GetVolumeInterface(ByVal role As Integer) As IAudioEndpointVolume
+    Private Shared Function CreateVolumeInterface(ByVal role As Integer) As IAudioEndpointVolume
         Try
             Dim enumType As Type = Type.GetTypeFromCLSID(New Guid(CLSID_MMDeviceEnumerator))
+            If enumType Is Nothing Then Return Nothing
             Dim enumerator As IMMDeviceEnumerator = CType(Activator.CreateInstance(enumType), IMMDeviceEnumerator)
             Dim device As IMMDevice = Nothing
-            Dim hr As Integer = enumerator.GetDefaultAudioEndpoint(0, role, device)
+            Dim hr As Integer = enumerator.GetDefaultAudioEndpoint(eRender, role, device)
             If hr <> 0 OrElse device Is Nothing Then Return Nothing
             Dim iid As Guid = New Guid(IID_IAudioEndpointVolume)
             Dim obj As Object = Nothing
-            hr = device.Activate(iid, 1, IntPtr.Zero, obj)
+            hr = device.Activate(iid, CLSCTX_INPROC_SERVER, IntPtr.Zero, obj)
             If hr <> 0 OrElse obj Is Nothing Then Return Nothing
             Return CType(obj, IAudioEndpointVolume)
-        Catch
+        Catch ex As Exception
+            modDiagnostics.LogException("QuickControlsAudio.CreateVolumeInterface", ex)
             Return Nothing
         End Try
     End Function
 
     Private Shared Function TryGetVolumeInterface() As IAudioEndpointVolume
-        Dim vol As IAudioEndpointVolume = GetVolumeInterface(1)
-        If vol IsNot Nothing Then Return vol
-        Return GetVolumeInterface(0)
+        SyncLock volumeLock
+            If cachedVolume IsNot Nothing Then Return cachedVolume
+            ' Console role matches hardware volume keys on most tablets.
+            cachedVolume = CreateVolumeInterface(eConsole)
+            If cachedVolume Is Nothing Then cachedVolume = CreateVolumeInterface(eMultimedia)
+            Return cachedVolume
+        End SyncLock
     End Function
 
-    Private Shared Function GetWaveOutPercent() As Integer
-        Dim packed As UInteger = 0
-        If waveOutGetVolume(IntPtr.Zero, packed) <> 0 Then Return -1
-        Dim left As Integer = CInt(packed And &HFFFFUI)
-        Return CInt(Math.Round(left / 655.35R))
-    End Function
-
-    Private Shared Function SetWaveOutPercent(ByVal percent As Integer) As Boolean
-        Dim clamped As Integer = Math.Max(0, Math.Min(100, percent))
-        Dim level As UInteger = CUInt(Math.Round(clamped * 655.35R))
-        Dim packed As UInteger = level Or (level << 16)
-        Return waveOutSetVolume(IntPtr.Zero, packed) = 0
-    End Function
+    Private Shared Sub InvalidateVolumeCache()
+        SyncLock volumeLock
+            cachedVolume = Nothing
+        End SyncLock
+    End Sub
 
     Public Shared Function GetVolumePercent() As Integer
         Try
@@ -498,31 +500,32 @@ Friend Class QuickControlsAudio
             If vol IsNot Nothing Then
                 Dim level As Single
                 If vol.GetMasterVolumeLevelScalar(level) = 0 Then
-                    Return CInt(Math.Round(level * 100.0F))
+                    Return Math.Max(0, Math.Min(100, CInt(Math.Round(level * 100.0F))))
                 End If
+                InvalidateVolumeCache()
             End If
         Catch
+            InvalidateVolumeCache()
         End Try
-
-        Dim wave As Integer = GetWaveOutPercent()
-        If wave >= 0 Then Return wave
-        Return 50
+        Return -1
     End Function
 
     Public Shared Sub SetVolumePercent(ByVal percent As Integer)
         Dim target As Integer = Math.Max(0, Math.Min(100, percent))
-
         Try
             Dim vol As IAudioEndpointVolume = TryGetVolumeInterface()
             If vol IsNot Nothing Then
                 Dim ctx As Guid = Guid.Empty
                 Dim scalar As Single = target / 100.0F
-                If vol.SetMasterVolumeLevelScalar(scalar, ctx) = 0 Then Return
+                If vol.SetMasterVolumeLevelScalar(scalar, ctx) = 0 Then
+                    LogVolumeIfChanged(target, "set")
+                    Return
+                End If
+                InvalidateVolumeCache()
             End If
         Catch
+            InvalidateVolumeCache()
         End Try
-
-        If SetWaveOutPercent(target) Then Return
         NudgeVolumeToPercent(target / 100.0F)
     End Sub
 
@@ -543,20 +546,26 @@ Friend Class QuickControlsAudio
         volumeListenerCount -= 1
         If volumeListenerCount > 0 Then Return
         ReleaseVolumeNotifications()
+        InvalidateVolumeCache()
     End Sub
 
     Private Shared Sub EnsureVolumeNotifications()
         If volumeCallback IsNot Nothing Then Return
         Try
             Dim vol As IAudioEndpointVolume = TryGetVolumeInterface()
-            If vol Is Nothing Then Return
+            If vol Is Nothing Then
+                modDiagnostics.LogInfo("QuickControlsAudio", "volume notifications unavailable (no endpoint)")
+                Return
+            End If
             volumeCallback = New EndpointVolumeCallback()
             AddHandler volumeCallback.VolumeChanged, AddressOf ForwardVolumeChanged
             volumeCallbackPtr = Marshal.GetComInterfaceForObject(volumeCallback, GetType(IAudioEndpointVolumeCallback))
-            If vol.RegisterControlChangeNotify(volumeCallbackPtr) = 0 Then
+            Dim hr As Integer = vol.RegisterControlChangeNotify(volumeCallbackPtr)
+            If hr = 0 Then
                 registeredVolume = vol
                 modDiagnostics.LogInfo("QuickControlsAudio", "volume notifications registered")
             Else
+                modDiagnostics.LogInfo("QuickControlsAudio", "RegisterControlChangeNotify hr=" & hr.ToString())
                 ReleaseVolumeNotifications()
             End If
         Catch ex As Exception
@@ -600,40 +609,61 @@ Friend Class QuickControlsAudio
         Try
             Dim vol As IAudioEndpointVolume = TryGetVolumeInterface()
             If vol Is Nothing Then Return False
-            Dim muted As Boolean
-            If vol.GetMute(muted) = 0 Then Return muted
+            Dim muted As Integer = 0
+            If vol.GetMute(muted) = 0 Then Return muted <> 0
+            InvalidateVolumeCache()
         Catch
+            InvalidateVolumeCache()
         End Try
         Return False
     End Function
 
-    Public Shared Sub SetMute(ByVal mute As Boolean)
+    ''' <summary>
+    ''' Sets absolute mute via Core Audio. Falls back to APPCOMMAND only if COM fails
+    ''' and the desired state still does not match after a toggle.
+    ''' </summary>
+    Public Shared Function SetMute(ByVal mute As Boolean) As Boolean
         Try
             Dim vol As IAudioEndpointVolume = TryGetVolumeInterface()
             If vol IsNot Nothing Then
                 Dim ctx As Guid = Guid.Empty
-                If vol.SetMute(mute, ctx) = 0 Then Return
+                If vol.SetMute(If(mute, 1, 0), ctx) = 0 Then
+                    Dim verify As Integer = 0
+                    If vol.GetMute(verify) = 0 AndAlso ((verify <> 0) = mute) Then Return True
+                End If
+                InvalidateVolumeCache()
             End If
         Catch
+            InvalidateVolumeCache()
         End Try
+
+        ' Last resort: toggle once if system mute does not already match.
+        If GetMute() = mute Then Return True
         SendAppCommand(APPCOMMAND_VOLUME_MUTE)
-    End Sub
+        Return GetMute() = mute
+    End Function
 
     Private Shared Sub NudgeVolumeToPercent(ByVal target As Single)
-        Dim current As Single = GetVolumePercent() / 100.0F
+        Dim currentPct As Integer = GetVolumePercent()
+        If currentPct < 0 Then Return
+        Dim current As Single = currentPct / 100.0F
         If Math.Abs(current - target) < 0.02F Then Return
 
         Dim maxSteps As Integer = 50
         Dim stepCount As Integer = 0
         While current < target - 0.01F AndAlso stepCount < maxSteps
             SendAppCommand(APPCOMMAND_VOLUME_UP)
-            current = GetVolumePercent() / 100.0F
+            currentPct = GetVolumePercent()
+            If currentPct < 0 Then Return
+            current = currentPct / 100.0F
             stepCount += 1
         End While
         stepCount = 0
         While current > target + 0.01F AndAlso stepCount < maxSteps
             SendAppCommand(APPCOMMAND_VOLUME_DOWN)
-            current = GetVolumePercent() / 100.0F
+            currentPct = GetVolumePercent()
+            If currentPct < 0 Then Return
+            current = currentPct / 100.0F
             stepCount += 1
         End While
     End Sub
@@ -677,15 +707,20 @@ End Class
 
 ''' <summary>
 ''' Auto-rotation lock — matches the tablet hardware / Action Center toggle.
-''' Windows stores this under HKLM AutoRotation\Enable (not HKCU alone).
+''' Writes HKCU + native (and HKLM when permitted); reads prefer HKCU / native over stale HKLM.
 ''' </summary>
 Friend Class QuickControlsRotation
     Private Const KeyPath As String = "SOFTWARE\Microsoft\Windows\CurrentVersion\AutoRotation"
     Private Const ValueName As String = "Enable"
+    Private Const AR_DISABLED As Integer = &H1
 
     ' Present on many Win8+/Win10 builds; used when registry alone is ignored live.
     <DllImport("user32.dll", EntryPoint:="SetAutoRotation", SetLastError:=True)> _
     Private Shared Function NativeSetAutoRotation(ByVal enable As Boolean) As Boolean
+    End Function
+
+    <DllImport("user32.dll", EntryPoint:="GetAutoRotationState", SetLastError:=True)> _
+    Private Shared Function NativeGetAutoRotationState(ByRef pState As Integer) As Boolean
     End Function
 
     ''' <summary>
@@ -701,9 +736,9 @@ Friend Class QuickControlsRotation
             NativeSetAutoRotation(enable <> 0)
         Catch
         End Try
-        ' Hardware button / Action Center use HKLM; also mirror HKCU for older builds.
-        WriteEnableValue(Registry.LocalMachine, enable)
+        ' Prefer writable HKCU first so UI can re-read what we actually set.
         WriteEnableValue(Registry.CurrentUser, enable)
+        WriteEnableValue(Registry.LocalMachine, enable)
         ' Some builds also keep an ImmersiveControlPanel mirror of the Action Center toggle.
         Try
             Dim icp As RegistryKey = Registry.CurrentUser.CreateSubKey( _
@@ -717,12 +752,44 @@ Friend Class QuickControlsRotation
         End Try
     End Sub
 
+    ''' <summary>
+    ''' AutoRotation Enable: 1 = rotate allowed, 0 = locked. Prefer HKCU / native over HKLM.
+    ''' </summary>
     Private Shared Function ReadEnableValue() As Integer
-        Dim hklm As Integer = ReadEnableFromHive(Registry.LocalMachine, -1)
-        If hklm >= 0 Then Return hklm
         Dim hkcu As Integer = ReadEnableFromHive(Registry.CurrentUser, -1)
         If hkcu >= 0 Then Return hkcu
+        Dim icpLock As Integer = ReadImmersiveRotationLock()
+        If icpLock >= 0 Then Return If(icpLock <> 0, 0, 1)
+        Dim nativeEnable As Integer = ReadNativeEnable()
+        If nativeEnable >= 0 Then Return nativeEnable
+        Dim hklm As Integer = ReadEnableFromHive(Registry.LocalMachine, -1)
+        If hklm >= 0 Then Return hklm
         Return 1
+    End Function
+
+    Private Shared Function ReadNativeEnable() As Integer
+        Try
+            Dim state As Integer = 0
+            If Not NativeGetAutoRotationState(state) Then Return -1
+            If (state And AR_DISABLED) <> 0 Then Return 0
+            Return 1
+        Catch
+            Return -1
+        End Try
+    End Function
+
+    Private Shared Function ReadImmersiveRotationLock() As Integer
+        Try
+            Dim key As RegistryKey = Registry.CurrentUser.OpenSubKey( _
+                "SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveControlPanel\Settings", False)
+            If key Is Nothing Then Return -1
+            Dim val As Object = key.GetValue("SystemSettings_Display_RotationLock")
+            key.Close()
+            If val Is Nothing Then Return -1
+            Return CInt(val)
+        Catch
+            Return -1
+        End Try
     End Function
 
     Private Shared Function ReadEnableFromHive(ByVal hive As RegistryKey, ByVal defaultValue As Integer) As Integer
@@ -805,14 +872,43 @@ Friend Class QuickControlsWifi
     End Function
 
     Public Shared Function Connect(ByVal ssid As String, ByVal password As String) As String
-        If String.IsNullOrEmpty(password) Then
-            Return modQuickControls.RunCommand("netsh", "wlan connect name=" & QuoteNetsh(ssid))
+        Return Connect(ssid, password, "")
+    End Function
+
+    ''' <summary>
+    ''' Connects to SSID. Open networks get an open-auth profile. Secured nets with an empty
+    ''' password try an existing profile first; returns NEED_PASSWORD:… when a passphrase is required.
+    ''' </summary>
+    Public Shared Function Connect(ByVal ssid As String, ByVal password As String, ByVal auth As String) As String
+        If String.IsNullOrEmpty(ssid) Then Return "no SSID"
+        If IsOpenAuth(auth) Then
+            Return AddProfileAndConnect(ssid, BuildOpenProfileXml(ssid))
         End If
+
+        If Not String.IsNullOrEmpty(password) Then
+            Return AddProfileAndConnect(ssid, BuildWpaProfileXml(ssid, password))
+        End If
+
+        Dim result As String = modQuickControls.RunCommand("netsh", "wlan connect name=" & QuoteNetsh(ssid))
+        If ConnectLooksSuccessful(result) Then Return result
+        If LooksLikeMissingProfile(result) Then
+            Return "NEED_PASSWORD:" & FirstLine(result)
+        End If
+        ' Empty-password connect often fails quietly when no profile exists.
+        If String.IsNullOrEmpty(result) OrElse LooksLikeConnectFailure(result) Then
+            Return "NEED_PASSWORD:" & FirstLine(If(String.IsNullOrEmpty(result), "no profile / connect failed", result))
+        End If
+        Return result
+    End Function
+
+    Private Shared Function AddProfileAndConnect(ByVal ssid As String, ByVal profileXml As String) As String
         Dim profilePath As String = Path.Combine(Path.GetTempPath(), "lcars-wifi-" & Guid.NewGuid().ToString("N") & ".xml")
         Try
-            File.WriteAllText(profilePath, BuildWpaProfileXml(ssid, password), Encoding.UTF8)
-            modQuickControls.RunCommand("netsh", "wlan add profile filename=" & QuoteNetsh(profilePath))
-            Return modQuickControls.RunCommand("netsh", "wlan connect name=" & QuoteNetsh(ssid))
+            File.WriteAllText(profilePath, profileXml, Encoding.UTF8)
+            Dim addResult As String = modQuickControls.RunCommand("netsh", "wlan add profile filename=" & QuoteNetsh(profilePath))
+            Dim connectResult As String = modQuickControls.RunCommand("netsh", "wlan connect name=" & QuoteNetsh(ssid))
+            If String.IsNullOrEmpty(connectResult) Then Return addResult
+            Return connectResult
         Finally
             Try
                 File.Delete(profilePath)
@@ -821,8 +917,59 @@ Friend Class QuickControlsWifi
         End Try
     End Function
 
+    Private Shared Function IsOpenAuth(ByVal auth As String) As Boolean
+        If String.IsNullOrEmpty(auth) Then Return False
+        Dim a As String = auth.Trim()
+        Return a.Equals("Open", StringComparison.OrdinalIgnoreCase) OrElse _
+               a.IndexOf("Open", StringComparison.OrdinalIgnoreCase) >= 0
+    End Function
+
+    Private Shared Function LooksLikeMissingProfile(ByVal text As String) As Boolean
+        If String.IsNullOrEmpty(text) Then Return False
+        Dim t As String = text.ToLowerInvariant()
+        Return t.Contains("there is no profile") OrElse _
+               t.Contains("no profile") OrElse _
+               (t.Contains("profile") AndAlso t.Contains("is not found")) OrElse _
+               t.Contains("cannot find") OrElse _
+               t.Contains("not found")
+    End Function
+
+    Private Shared Function LooksLikeConnectFailure(ByVal text As String) As Boolean
+        If String.IsNullOrEmpty(text) Then Return True
+        Dim t As String = text.ToLowerInvariant()
+        Return t.Contains("failed") OrElse t.Contains("error") OrElse t.Contains("unable")
+    End Function
+
+    Private Shared Function ConnectLooksSuccessful(ByVal text As String) As Boolean
+        If String.IsNullOrEmpty(text) Then Return False
+        Dim t As String = text.ToLowerInvariant()
+        Return t.Contains("connection request was completed successfully") OrElse _
+               t.Contains("successfully") AndAlso Not LooksLikeConnectFailure(text)
+    End Function
+
+    Private Shared Function FirstLine(ByVal text As String) As String
+        If text Is Nothing Then Return ""
+        For Each line As String In text.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries)
+            Dim t As String = line.Trim()
+            If t <> "" Then Return t
+        Next
+        Return text.Trim()
+    End Function
+
     Private Shared Function QuoteNetsh(ByVal value As String) As String
         Return """" & value.Replace("""", "") & """"
+    End Function
+
+    Private Shared Function BuildOpenProfileXml(ByVal ssid As String) As String
+        Dim escapedSsid As String = System.Security.SecurityElement.Escape(ssid)
+        Return "<?xml version=""1.0""?>" & _
+               "<WLANProfile xmlns=""http://www.microsoft.com/networking/WLAN/profile/v1"">" & _
+               "<name>" & escapedSsid & "</name>" & _
+               "<SSIDConfig><SSID><name>" & escapedSsid & "</name></SSID></SSIDConfig>" & _
+               "<connectionType>ESS</connectionType><connectionMode>auto</connectionMode>" & _
+               "<MSM><security><authEncryption><authentication>open</authentication>" & _
+               "<encryption>none</encryption><useOneX>false</useOneX></authEncryption>" & _
+               "</security></MSM></WLANProfile>"
     End Function
 
     Private Shared Function BuildWpaProfileXml(ByVal ssid As String, ByVal password As String) As String
@@ -855,13 +1002,21 @@ Friend Class QuickControlsBluetooth
     End Class
 
     Public Shared Function IsBluetoothOn() As Boolean
-        Dim result As String = modQuickControls.RunPowerShell(GetRadioScript() & "; if ($script:btOn -eq $null) { 'unknown' } else { $script:btOn }")
+        Dim result As String = modQuickControls.RunPowerShell(GetRadioStateScript())
         Return result.Trim().Equals("True", StringComparison.OrdinalIgnoreCase)
     End Function
 
-    Public Shared Sub SetBluetoothOn(ByVal enabled As Boolean)
-        modQuickControls.RunPowerShell(GetRadioScript() & "; Set-BtRadio " & If(enabled, "$true", "$false"))
-    End Sub
+    ''' <summary>
+    ''' Turns Bluetooth radio on/off after RequestAccessAsync. Returns "OK" or a failure reason.
+    ''' Callers must not flip UI unless the result is OK.
+    ''' </summary>
+    Public Shared Function SetBluetoothOn(ByVal enabled As Boolean) As String
+        Dim result As String = modQuickControls.RunPowerShell( _
+            GetRadioScript() & "; Set-BtRadio " & If(enabled, "$true", "$false"))
+        Dim trimmed As String = FirstStatusLine(result)
+        If trimmed = "" Then Return "bluetooth radio failed"
+        Return trimmed
+    End Function
 
     Public Shared Function ListDevices() As List(Of BtDevice)
         Dim list As New List(Of BtDevice)
@@ -1026,13 +1181,32 @@ Friend Class QuickControlsBluetooth
                "function Await($WinRtTask, $ResultType) { $asTask = $asTaskGeneric.MakeGenericMethod($ResultType); $netTask = $asTask.Invoke($null, @($WinRtTask)); $netTask.Wait(-1) | Out-Null; $netTask.Result }; "
     End Function
 
+    Private Shared Function GetRadioStateScript() As String
+        Return GetAwaitBootstrap() & _
+               "[Windows.Devices.Radios.Radio,Windows.Devices.Radios,ContentType=WindowsRuntime] | Out-Null; " & _
+               "try { " & _
+               "$access = Await ([Windows.Devices.Radios.Radio]::RequestAccessAsync()) ([Windows.Devices.Radios.RadioAccessStatus]); " & _
+               "if ($access -ne 'Allowed') { Write-Output 'False'; return }; " & _
+               "$radios = Await ([Windows.Devices.Radios.Radio]::GetRadiosAsync()) ([System.Collections.Generic.IReadOnlyList[Windows.Devices.Radios.Radio]]); " & _
+               "$bt = ($radios | ? { $_.Kind -eq 'Bluetooth' } | select -first 1); " & _
+               "if ($bt) { Write-Output ($bt.State -eq 'On') } else { Write-Output 'False' } " & _
+               "} catch { Write-Output 'False' }"
+    End Function
+
     Private Shared Function GetRadioScript() As String
         Return GetAwaitBootstrap() & _
                "[Windows.Devices.Radios.Radio,Windows.Devices.Radios,ContentType=WindowsRuntime] | Out-Null; " & _
-               "function Set-BtRadio($on) { $radios = Await ([Windows.Devices.Radios.Radio]::GetRadiosAsync()) ([System.Collections.Generic.IReadOnlyList[Windows.Devices.Radios.Radio]]); " & _
-               "foreach ($r in $radios) { if ($r.Kind -eq 'Bluetooth') { if ($on) { Await ($r.SetStateAsync([Windows.Devices.Radios.RadioState]::On)) ([Windows.Devices.Radios.RadioAccessStatus]) | Out-Null } " & _
-               "else { Await ($r.SetStateAsync([Windows.Devices.Radios.RadioState]::Off)) ([Windows.Devices.Radios.RadioAccessStatus]) | Out-Null } } }; " & _
-               "$bt = ($radios | ? { $_.Kind -eq 'Bluetooth' } | select -first 1); if ($bt) { $script:btOn = ($bt.State -eq 'On') } }"
+               "function Set-BtRadio($on) { " & _
+               "try { " & _
+               "$access = Await ([Windows.Devices.Radios.Radio]::RequestAccessAsync()) ([Windows.Devices.Radios.RadioAccessStatus]); " & _
+               "if ($access -ne 'Allowed') { Write-Output ('access denied: ' + [string]$access); return }; " & _
+               "$radios = Await ([Windows.Devices.Radios.Radio]::GetRadiosAsync()) ([System.Collections.Generic.IReadOnlyList[Windows.Devices.Radios.Radio]]); " & _
+               "$bt = ($radios | ? { $_.Kind -eq 'Bluetooth' } | select -first 1); " & _
+               "if ($bt -eq $null) { Write-Output 'no bluetooth radio'; return }; " & _
+               "$target = if ($on) { [Windows.Devices.Radios.RadioState]::On } else { [Windows.Devices.Radios.RadioState]::Off }; " & _
+               "$status = Await ($bt.SetStateAsync($target)) ([Windows.Devices.Radios.RadioAccessStatus]); " & _
+               "if ($status -eq 'Allowed') { Write-Output 'OK' } else { Write-Output ('radio denied: ' + [string]$status) } " & _
+               "} catch { Write-Output ('bluetooth failed: ' + $_.Exception.Message) } }"
     End Function
 
     Private Shared Function GetListScript() As String
@@ -1220,6 +1394,13 @@ Friend Class QuickControlsPower
     Private Shared planNames As New List(Of String)
     Private Shared lastLoaded As DateTime = DateTime.MinValue
 
+    ' Built-in Windows scheme GUIDs (may be hidden until duplicated on tablets).
+    Private Shared ReadOnly StandardSchemeGuids As String() = {
+        "381b4222-f694-41f0-9685-ff5bb260df2e",
+        "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+        "a1841308-3541-4fab-bc81-f71556f20b4a"
+    }
+
     Public Shared Function GetBatterySummary() As String
         Dim ps As PowerStatus = SystemInformation.PowerStatus
         Dim pct As Integer = CInt(Math.Round(ps.BatteryLifePercent * 100))
@@ -1236,24 +1417,74 @@ Friend Class QuickControlsPower
         Return name.ToUpperInvariant()
     End Function
 
-    Public Shared Sub CyclePowerPlan()
-        LoadPlansIfNeeded()
-        If planGuids.Count = 0 Then Return
+    ''' <summary>
+    ''' Cycles to the next power plan by GUID. Returns the new plan name, or a failure message.
+    ''' </summary>
+    Public Shared Function CyclePowerPlan() As String
+        EnsureStandardPlansVisible()
+        LoadPlansIfNeeded(True)
+        If planGuids.Count = 0 Then Return "no power plans found"
+        If planGuids.Count = 1 Then
+            Return "only one plan: " & If(planNames.Count > 0, planNames(0), planGuids(0))
+        End If
+
+        Dim activeGuid As String = GetActivePlanGuid()
         Dim activeIndex As Integer = 0
-        Dim activeName As String = GetActivePlanName()
-        For i As Integer = 0 To planNames.Count - 1
-            If planNames(i).IndexOf(activeName, StringComparison.OrdinalIgnoreCase) >= 0 OrElse activeName.IndexOf(planNames(i), StringComparison.OrdinalIgnoreCase) >= 0 Then
-                activeIndex = i
-                Exit For
-            End If
-        Next
+        Dim matched As Boolean = False
+        If Not String.IsNullOrEmpty(activeGuid) Then
+            For i As Integer = 0 To planGuids.Count - 1
+                If String.Equals(planGuids(i), activeGuid, StringComparison.OrdinalIgnoreCase) Then
+                    activeIndex = i
+                    matched = True
+                    Exit For
+                End If
+            Next
+        End If
+        If Not matched Then
+            ' Fall back to index 0 so cycling still advances from an unknown active plan.
+            activeIndex = 0
+        End If
         Dim nextIndex As Integer = (activeIndex + 1) Mod planGuids.Count
-        modQuickControls.RunCommand("powercfg", "/setactive " & planGuids(nextIndex))
+        Dim exitCode As Integer = -1
+        Dim output As String = modQuickControls.RunCommandEx("powercfg", "/setactive " & planGuids(nextIndex), exitCode)
+        lastLoaded = DateTime.MinValue
+        If exitCode <> 0 Then
+            Dim detail As String = If(String.IsNullOrEmpty(output), "exit " & exitCode.ToString(), output.Trim())
+            Return "powercfg failed: " & detail
+        End If
+        Dim newName As String = GetActivePlanName()
+        If String.IsNullOrEmpty(newName) OrElse newName = "Unknown" Then
+            If nextIndex < planNames.Count AndAlso Not String.IsNullOrEmpty(planNames(nextIndex)) Then
+                newName = planNames(nextIndex)
+            Else
+                newName = "switched"
+            End If
+        End If
+        Return "OK:" & newName
+    End Function
+
+    ''' <summary>
+    ''' Unhides Balanced / High performance / Power saver when the device only exposes one scheme.
+    ''' </summary>
+    Private Shared Sub EnsureStandardPlansVisible()
+        LoadPlansIfNeeded(True)
+        If planGuids.Count >= 2 Then Return
+        For Each schemeGuid As String In StandardSchemeGuids
+            Dim already As Boolean = False
+            For Each g As String In planGuids
+                If String.Equals(g, schemeGuid, StringComparison.OrdinalIgnoreCase) Then
+                    already = True
+                    Exit For
+                End If
+            Next
+            If already Then Continue For
+            Dim exitCode As Integer = -1
+            modQuickControls.RunCommandEx("powercfg", "-duplicatescheme " & schemeGuid, exitCode)
+        Next
         lastLoaded = DateTime.MinValue
     End Sub
 
     Public Shared Function GetActivePlanName() As String
-        LoadPlansIfNeeded()
         Dim text As String = modQuickControls.RunCommand("powercfg", "/getactivescheme")
         For Each line As String In text.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries)
             If line.IndexOf("Power Scheme GUID", StringComparison.OrdinalIgnoreCase) >= 0 Then
@@ -1265,8 +1496,23 @@ Friend Class QuickControlsPower
         Return "Unknown"
     End Function
 
-    Private Shared Sub LoadPlansIfNeeded()
-        If (DateTime.Now - lastLoaded).TotalSeconds < 5 AndAlso planGuids.Count > 0 Then Return
+    Public Shared Function GetActivePlanGuid() As String
+        Dim text As String = modQuickControls.RunCommand("powercfg", "/getactivescheme")
+        For Each line As String In text.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries)
+            If line.IndexOf("Power Scheme GUID", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                Dim guidStart As Integer = line.IndexOf(":"c) + 1
+                Dim guidEnd As Integer = line.IndexOf("("c)
+                If guidEnd < 0 Then guidEnd = line.Length
+                If guidStart > 0 AndAlso guidEnd > guidStart Then
+                    Return line.Substring(guidStart, guidEnd - guidStart).Trim()
+                End If
+            End If
+        Next
+        Return ""
+    End Function
+
+    Private Shared Sub LoadPlansIfNeeded(Optional ByVal force As Boolean = False)
+        If Not force AndAlso (DateTime.Now - lastLoaded).TotalSeconds < 5 AndAlso planGuids.Count > 0 Then Return
         planGuids.Clear()
         planNames.Clear()
         Dim text As String = modQuickControls.RunCommand("powercfg", "/list")
@@ -1280,6 +1526,7 @@ Friend Class QuickControlsPower
                 Dim p As Integer = line.IndexOf("("c)
                 Dim q As Integer = line.LastIndexOf(")"c)
                 If p >= 0 AndAlso q > p Then name = line.Substring(p + 1, q - p - 1).Trim()
+                If String.IsNullOrEmpty(guid) Then Continue For
                 planGuids.Add(guid)
                 planNames.Add(name)
             End If
@@ -1289,51 +1536,203 @@ Friend Class QuickControlsPower
 End Class
 
 ''' <summary>
-''' Primary IPv4 and current network name (Wi-Fi SSID or Ethernet connection).
+''' Primary IPv4, adapter/SSID, MAC, gateway/CIDR, VPN, and live RX/TX bytes/sec.
 ''' </summary>
 Friend Class QuickControlsNetworkInfo
+    Public Class Snapshot
+        Public Ip As String = ""
+        Public AdapterOrSsid As String = ""
+        Public Mac As String = ""
+        Public Gateway As String = ""
+        Public CidrPrefix As String = ""
+        Public SubnetMask As String = ""
+        Public Vpn As String = "OFF"
+        Public RxBytesPerSec As Long = 0
+        Public TxBytesPerSec As Long = 0
+    End Class
+
+    Private Shared lastInterfaceId As String = ""
+    Private Shared lastBytesReceived As Long = -1
+    Private Shared lastBytesSent As Long = -1
+    Private Shared lastSampleUtc As DateTime = DateTime.MinValue
+
+    Public Shared Function GetSnapshot() As Snapshot
+        Dim snap As New Snapshot()
+        Try
+            Dim primary As System.Net.NetworkInformation.NetworkInterface = FindPrimaryInterface()
+            If primary IsNot Nothing Then
+                FillFromInterface(primary, snap)
+                UpdateThroughput(primary, snap)
+            End If
+            Dim ssid As String = GetConnectedWifiSsid()
+            If Not String.IsNullOrEmpty(ssid) Then
+                snap.AdapterOrSsid = ssid
+            ElseIf primary IsNot Nothing Then
+                Dim name As String = primary.Name
+                If String.IsNullOrEmpty(name) Then name = primary.Description
+                snap.AdapterOrSsid = name
+            End If
+            snap.Vpn = GetVpnStatus()
+        Catch
+        End Try
+        Return snap
+    End Function
+
     Public Shared Function GetPrimaryIPv4() As String
+        Return GetSnapshot().Ip
+    End Function
+
+    Public Shared Function GetCurrentNetworkName() As String
+        Return GetSnapshot().AdapterOrSsid
+    End Function
+
+    Private Shared Function PrefixLengthToMask(ByVal prefix As Integer) As String
+        If prefix <= 0 OrElse prefix > 32 Then Return ""
+        ' Build dotted-quad from prefix length (avoid VB UInteger shift quirks).
+        Dim bits As Long = If(prefix = 32, &HFFFFFFFFL, (&HFFFFFFFFL << (32 - prefix)) And &HFFFFFFFFL)
+        Return String.Format("{0}.{1}.{2}.{3}",
+                             CInt((bits >> 24) And &HFFL),
+                             CInt((bits >> 16) And &HFFL),
+                             CInt((bits >> 8) And &HFFL),
+                             CInt(bits And &HFFL))
+    End Function
+
+    ''' <summary>
+    ''' Converts a "/22"-style prefix string to a dotted subnet mask.
+    ''' </summary>
+    Friend Shared Function MaskFromCidrPrefix(ByVal cidrPrefix As String) As String
+        If String.IsNullOrEmpty(cidrPrefix) Then Return ""
+        Dim digits As String = cidrPrefix.Trim().TrimStart("/"c)
+        Dim prefix As Integer = 0
+        If Not Integer.TryParse(digits, prefix) Then Return ""
+        Return PrefixLengthToMask(prefix)
+    End Function
+
+    Private Shared Sub FillFromInterface(ByVal ni As System.Net.NetworkInformation.NetworkInterface, ByVal snap As Snapshot)
+        Try
+            Dim macBytes() As Byte = ni.GetPhysicalAddress().GetAddressBytes()
+            If macBytes IsNot Nothing AndAlso macBytes.Length > 0 Then
+                Dim parts As New List(Of String)
+                For Each b As Byte In macBytes
+                    parts.Add(b.ToString("X2"))
+                Next
+                snap.Mac = String.Join(":", parts.ToArray())
+            End If
+        Catch
+        End Try
+
+        Dim props As System.Net.NetworkInformation.IPInterfaceProperties = ni.GetIPProperties()
+        If props Is Nothing Then Return
+
+        If props.GatewayAddresses IsNot Nothing Then
+            For Each gw As System.Net.NetworkInformation.GatewayIPAddressInformation In props.GatewayAddresses
+                If gw.Address Is Nothing Then Continue For
+                If gw.Address.AddressFamily <> System.Net.Sockets.AddressFamily.InterNetwork Then Continue For
+                Dim g As String = gw.Address.ToString()
+                If g = "0.0.0.0" Then Continue For
+                snap.Gateway = g
+                Exit For
+            Next
+        End If
+
+        If props.UnicastAddresses Is Nothing Then Return
+        For Each addr As System.Net.NetworkInformation.UnicastIPAddressInformation In props.UnicastAddresses
+            If addr.Address Is Nothing Then Continue For
+            If addr.Address.AddressFamily <> System.Net.Sockets.AddressFamily.InterNetwork Then Continue For
+            Dim ip As String = addr.Address.ToString()
+            If ip.StartsWith("169.254.", StringComparison.Ordinal) Then Continue For
+            snap.Ip = ip
+            Dim prefix As Integer = 0
+            Try
+                prefix = addr.PrefixLength
+            Catch
+                prefix = 0
+            End Try
+            If prefix > 0 Then
+                snap.CidrPrefix = "/" & prefix.ToString()
+                snap.SubnetMask = PrefixLengthToMask(prefix)
+            End If
+            If String.IsNullOrEmpty(snap.SubnetMask) AndAlso addr.IPv4Mask IsNot Nothing Then
+                snap.SubnetMask = addr.IPv4Mask.ToString()
+            End If
+            Exit For
+        Next
+    End Sub
+
+    Private Shared Sub UpdateThroughput(ByVal ni As System.Net.NetworkInformation.NetworkInterface, ByVal snap As Snapshot)
+        Try
+            Dim stats As System.Net.NetworkInformation.IPv4InterfaceStatistics = ni.GetIPv4Statistics()
+            Dim nowUtc As DateTime = DateTime.UtcNow
+            Dim rx As Long = stats.BytesReceived
+            Dim tx As Long = stats.BytesSent
+            Dim id As String = ni.Id
+            If id = lastInterfaceId AndAlso lastBytesReceived >= 0 AndAlso lastSampleUtc <> DateTime.MinValue Then
+                Dim seconds As Double = (nowUtc - lastSampleUtc).TotalSeconds
+                If seconds > 0.05R Then
+                    snap.RxBytesPerSec = CLng(Math.Max(0, (rx - lastBytesReceived) / seconds))
+                    snap.TxBytesPerSec = CLng(Math.Max(0, (tx - lastBytesSent) / seconds))
+                End If
+            End If
+            lastInterfaceId = id
+            lastBytesReceived = rx
+            lastBytesSent = tx
+            lastSampleUtc = nowUtc
+        Catch
+        End Try
+    End Sub
+
+    Private Shared Function FindPrimaryInterface() As System.Net.NetworkInformation.NetworkInterface
+        Dim fallback As System.Net.NetworkInformation.NetworkInterface = Nothing
+        For Each ni As System.Net.NetworkInformation.NetworkInterface In System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            If ni.OperationalStatus <> System.Net.NetworkInformation.OperationalStatus.Up Then Continue For
+            If ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Loopback Then Continue For
+            If ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Tunnel Then Continue For
+            Dim props As System.Net.NetworkInformation.IPInterfaceProperties = ni.GetIPProperties()
+            If props Is Nothing OrElse props.UnicastAddresses Is Nothing Then Continue For
+            Dim hasIpv4 As Boolean = False
+            For Each addr As System.Net.NetworkInformation.UnicastIPAddressInformation In props.UnicastAddresses
+                If addr.Address Is Nothing Then Continue For
+                If addr.Address.AddressFamily <> System.Net.Sockets.AddressFamily.InterNetwork Then Continue For
+                Dim ip As String = addr.Address.ToString()
+                If ip.StartsWith("169.254.", StringComparison.Ordinal) Then Continue For
+                hasIpv4 = True
+                Exit For
+            Next
+            If Not hasIpv4 Then Continue For
+            If ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211 OrElse _
+               ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Ethernet OrElse _
+               ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.GigabitEthernet Then
+                Return ni
+            End If
+            If fallback Is Nothing Then fallback = ni
+        Next
+        Return fallback
+    End Function
+
+    Private Shared Function GetVpnStatus() As String
         Try
             For Each ni As System.Net.NetworkInformation.NetworkInterface In System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
                 If ni.OperationalStatus <> System.Net.NetworkInformation.OperationalStatus.Up Then Continue For
-                If ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Loopback Then Continue For
+                Dim desc As String = (If(ni.Description, "") & " " & If(ni.Name, "")).ToLowerInvariant()
+                Dim isVpnish As Boolean = ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Tunnel OrElse _
+                                          desc.Contains("vpn") OrElse desc.Contains("tap") OrElse _
+                                          desc.Contains("tun") OrElse desc.Contains("wintun") OrElse _
+                                          desc.Contains("wireguard") OrElse desc.Contains("ppp")
+                If Not isVpnish Then Continue For
                 Dim props As System.Net.NetworkInformation.IPInterfaceProperties = ni.GetIPProperties()
                 If props Is Nothing OrElse props.UnicastAddresses Is Nothing Then Continue For
                 For Each addr As System.Net.NetworkInformation.UnicastIPAddressInformation In props.UnicastAddresses
                     If addr.Address Is Nothing Then Continue For
-                    If addr.Address.AddressFamily <> System.Net.Sockets.AddressFamily.InterNetwork Then Continue For
-                    Dim ip As String = addr.Address.ToString()
-                    If ip.StartsWith("169.254.", StringComparison.Ordinal) Then Continue For
-                    Return ip
+                    If addr.Address.AddressFamily = System.Net.Sockets.AddressFamily.InterNetwork Then
+                        Dim name As String = ni.Name
+                        If String.IsNullOrEmpty(name) Then name = ni.Description
+                        Return "ON — " & name
+                    End If
                 Next
             Next
         Catch
         End Try
-        Return ""
-    End Function
-
-    Public Shared Function GetCurrentNetworkName() As String
-        Dim ssid As String = GetConnectedWifiSsid()
-        If Not String.IsNullOrEmpty(ssid) Then Return ssid
-        Try
-            For Each ni As System.Net.NetworkInformation.NetworkInterface In System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
-                If ni.OperationalStatus <> System.Net.NetworkInformation.OperationalStatus.Up Then Continue For
-                If ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Loopback Then Continue For
-                If ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Tunnel Then Continue For
-                Dim name As String = ni.Name
-                If String.IsNullOrEmpty(name) Then name = ni.Description
-                If Not String.IsNullOrEmpty(name) Then
-                    If ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.Ethernet OrElse _
-                       ni.NetworkInterfaceType = System.Net.NetworkInformation.NetworkInterfaceType.GigabitEthernet OrElse _
-                       name.IndexOf("Ethernet", StringComparison.OrdinalIgnoreCase) >= 0 Then
-                        Return "Ethernet — " & name
-                    End If
-                    Return name
-                End If
-            Next
-        Catch
-        End Try
-        Return ""
+        Return "OFF"
     End Function
 
     Private Shared Function GetConnectedWifiSsid() As String

@@ -19,10 +19,19 @@ Namespace My
             AddHandler System.Windows.Forms.Application.ThreadException, AddressOf Application_ThreadException
             ' Winlogon may respawn LCARS mid-install. Exit immediately so we do not
             ' prewarm OSK / lock USB binaries while runInstallScript is copying.
+            ' A hard reboot leaves the flag behind with no installer — that used to
+            ' cancel startup with no Explorer fallback (black desktop). Only block
+            ' while runInstallScript is actually running and the flag is fresh.
             If modShellFallback.IsUpdateInProgress() AndAlso Not Command().ToLower().Contains("-u") Then
-                modDiagnostics.LogInfo("MyApplication_Startup", "update-in-progress.flag present — exiting without shell init")
-                e.Cancel = True
-                Return
+                If modShellFallback.ShouldHonorUpdateInProgressBlock() Then
+                    modDiagnostics.LogInfo("MyApplication_Startup", "update-in-progress.flag + installer running — exiting without shell init; starting Explorer so desktop is not blank")
+                    modShellFallback.EnsureExplorerRunning()
+                    e.Cancel = True
+                    Return
+                End If
+                modDiagnostics.LogInfo("MyApplication_Startup", "stale update-in-progress.flag (no installer) — clearing and continuing shell start")
+                modShellFallback.ClearUpdateInProgress()
+                modShellFallback.ClearPendingShellRestart()
             End If
             If Command().ToLower().Contains("--settings") Then
                 'Load settings

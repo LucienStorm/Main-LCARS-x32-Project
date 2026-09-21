@@ -8,8 +8,8 @@ Imports System.Windows.Forms
 Imports LibVLCSharp.Shared
 
 ''' <summary>
-''' LibVLC host for local audio/video. Natives live in lib\vlc next to the exe
-''' (or are auto-extracted from lib-vlc.zip on first use).
+''' LibVLC host for local audio/video and network streams.
+''' Natives: lib\vlc next to LCARSmedia.exe (or auto-extract lib-vlc.zip).
 ''' </summary>
 Public Class VlcPlaybackHost
     Implements IDisposable
@@ -20,9 +20,19 @@ Public Class VlcPlaybackHost
     Private _disposed As Boolean
     Private _rateIndex As Integer = 2
     Private Shared ReadOnly RateSteps As Single() = {0.5F, 0.75F, 1.0F, 1.25F, 1.5F, 2.0F}
+    Private Shared _coreReady As Boolean
 
     Public Event PlaybackEnded As EventHandler
     Public Event TimeChanged As EventHandler
+    Public Event PlaybackFailed As EventHandler
+
+    Private _lastError As String = ""
+
+    Public ReadOnly Property LastError As String
+        Get
+            Return If(_lastError, "")
+        End Get
+    End Property
 
     Public ReadOnly Property IsPlaying As Boolean
         Get
@@ -82,16 +92,33 @@ Public Class VlcPlaybackHost
                 "LibVLC natives not found. Expected lib\vlc\libvlc.dll next to LCARSmedia.exe" &
                 " (or lib-vlc.zip to extract). Re-run LCARS Update.")
         End If
-        Core.Initialize(vlcDir)
+
+        Dim pluginDir As String = Path.Combine(vlcDir, "plugins")
+        If Not Directory.Exists(pluginDir) Then
+            Throw New DirectoryNotFoundException("LibVLC plugins folder missing:" & vbCrLf & pluginDir)
+        End If
+
+        ' Explicit plugin path — Core.Initialize alone is not always enough on tablet installs.
+        Environment.SetEnvironmentVariable("VLC_PLUGIN_PATH", pluginDir)
+        If Not _coreReady Then
+            Core.Initialize(vlcDir)
+            _coreReady = True
+        End If
+
         _lib = New LibVLC(
             "--no-video-title-show",
             "--quiet",
-            "--file-caching=300",
-            "--network-caching=1000")
+            "--avcodec-hw=none",
+            "--aout=directsound",
+            "--file-caching=1000",
+            "--network-caching=3000",
+            "--plugin-path=" & pluginDir)
         _player = New MediaPlayer(_lib)
         AddHandler _player.EndReached, AddressOf OnEndReached
         AddHandler _player.TimeChanged, AddressOf OnTimeChanged
+        AddHandler _player.EncounteredError, AddressOf OnEncounteredError
         _player.Volume = 100
+        WriteDiag("LibVLC ready. dir=" & vlcDir & " plugins=" & pluginDir)
     End Sub
 
     Public Sub AttachVideoSurface(ByVal hwnd As IntPtr)
@@ -101,14 +128,42 @@ Public Class VlcPlaybackHost
 
     Public Sub PlayFile(ByVal path As String)
         EnsureInitialized()
-        If String.IsNullOrEmpty(path) OrElse Not File.Exists(path) Then
-            Throw New FileNotFoundException("Media file not found.", path)
+        _lastError = ""
+        If String.IsNullOrEmpty(path) Then
+            Throw New FileNotFoundException("Media path was empty.")
         End If
-        StopPlayback()
-        _media = New LibVLCSharp.Shared.Media(_lib, New Uri(System.IO.Path.GetFullPath(path)))
+        path = path.Trim().Trim(""""c)
+        If Not File.Exists(path) Then
+            Throw New FileNotFoundException(
+                "Media file not found or not accessible:" & vbCrLf & path, path)
+        End If
+        StopPlaybackKeepSurface()
+        Dim full As String = System.IO.Path.GetFullPath(path)
+        _media = New LibVLCSharp.Shared.Media(_lib, full, FromType.FromPath)
+        _media.AddOption(":avcodec-hw=none")
+        _media.AddOption(":file-caching=1000")
         Dim started As Boolean = _player.Play(_media)
+        WriteDiag("PlayFile started=" & started.ToString() & " path=" & full & " state=" & _player.State.ToString())
         If Not started Then
-            Throw New InvalidOperationException("LibVLC Play() returned false for:" & vbCrLf & path)
+            Throw New InvalidOperationException("LibVLC Play() returned false for:" & vbCrLf & full)
+        End If
+    End Sub
+
+    ''' <summary>Network / radio stream (http, https, m3u, pls, icy).</summary>
+    Public Sub PlayUrl(ByVal url As String)
+        EnsureInitialized()
+        _lastError = ""
+        If String.IsNullOrEmpty(url) Then
+            Throw New ArgumentException("Stream URL was empty.")
+        End If
+        url = url.Trim()
+        StopPlaybackKeepSurface()
+        _media = New LibVLCSharp.Shared.Media(_lib, url, FromType.FromLocation)
+        _media.AddOption(":network-caching=3000")
+        Dim started As Boolean = _player.Play(_media)
+        WriteDiag("PlayUrl started=" & started.ToString() & " url=" & url)
+        If Not started Then
+            Throw New InvalidOperationException("LibVLC Play() returned false for stream:" & vbCrLf & url)
         End If
     End Sub
 
@@ -132,11 +187,21 @@ Public Class VlcPlaybackHost
     End Sub
 
     Public Sub StopPlayback()
+        StopPlaybackKeepSurface()
+    End Sub
+
+    Private Sub StopPlaybackKeepSurface()
         If _player IsNot Nothing Then
-            _player.Stop()
+            Try
+                _player.Stop()
+            Catch
+            End Try
         End If
         If _media IsNot Nothing Then
-            _media.Dispose()
+            Try
+                _media.Dispose()
+            Catch
+            End Try
             _media = Nothing
         End If
     End Sub
@@ -242,29 +307,61 @@ Public Class VlcPlaybackHost
         RaiseEvent TimeChanged(Me, EventArgs.Empty)
     End Sub
 
+    Private Sub OnEncounteredError(ByVal sender As Object, ByVal e As EventArgs)
+        Dim st As String = ""
+        Try
+            If _player IsNot Nothing Then st = _player.State.ToString()
+        Catch
+        End Try
+        _lastError = "LibVLC EncounteredError (state=" & st & "). Check lib\vlc\plugins and codecs."
+        WriteDiag(_lastError)
+        RaiseEvent PlaybackFailed(Me, EventArgs.Empty)
+    End Sub
+
+    Private Shared Sub WriteDiag(ByVal line As String)
+        Try
+            Dim logPath As String = System.IO.Path.Combine(Application.StartupPath, "lcars-media-vlc.log")
+            File.AppendAllText(logPath, DateTime.Now.ToString("u") & " " & line & Environment.NewLine)
+        Catch
+        End Try
+    End Sub
+
     Private Shared Sub TryExtractBundledZip()
         Try
             Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
             Dim zipPath As String = Path.Combine(baseDir, "lib-vlc.zip")
+            If Not File.Exists(zipPath) Then
+                zipPath = Path.Combine(Application.StartupPath, "lib-vlc.zip")
+            End If
             If Not File.Exists(zipPath) Then Return
-            Dim marker As String = Path.Combine(Path.Combine(baseDir, "lib"), Path.Combine("vlc", "libvlc.dll"))
+            Dim extractRoot As String = Application.StartupPath
+            If Not File.Exists(Path.Combine(extractRoot, "LCARSmedia.exe")) Then
+                extractRoot = baseDir
+            End If
+            Dim marker As String = Path.Combine(Path.Combine(extractRoot, "lib"), Path.Combine("vlc", "libvlc.dll"))
             If File.Exists(marker) Then Return
-            ZipFile.ExtractToDirectory(zipPath, baseDir)
-        Catch
+            ZipFile.ExtractToDirectory(zipPath, extractRoot)
+            WriteDiag("Extracted lib-vlc.zip to " & extractRoot)
+        Catch ex As Exception
+            WriteDiag("Extract zip failed: " & ex.Message)
         End Try
     End Sub
 
     Private Shared Function FindVlcDirectory() As String
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
         Dim candidates As String() = {
+            Path.Combine(Path.Combine(Application.StartupPath, "lib"), "vlc"),
             Path.Combine(Path.Combine(baseDir, "lib"), "vlc"),
             Path.Combine(baseDir, "vlc"),
-            Path.Combine(Application.StartupPath, Path.Combine("lib", "vlc"))
+            Path.Combine(Application.StartupPath, "vlc")
         }
         For Each c As String In candidates
             Try
                 Dim full As String = Path.GetFullPath(c)
-                If File.Exists(Path.Combine(full, "libvlc.dll")) Then Return full
+                If File.Exists(Path.Combine(full, "libvlc.dll")) AndAlso
+                   Directory.Exists(Path.Combine(full, "plugins")) Then
+                    Return full
+                End If
             Catch
             End Try
         Next
@@ -278,8 +375,9 @@ Public Class VlcPlaybackHost
             If _player IsNot Nothing Then
                 RemoveHandler _player.EndReached, AddressOf OnEndReached
                 RemoveHandler _player.TimeChanged, AddressOf OnTimeChanged
+                RemoveHandler _player.EncounteredError, AddressOf OnEncounteredError
             End If
-            StopPlayback()
+            StopPlaybackKeepSurface()
         Catch
         End Try
         If _player IsNot Nothing Then

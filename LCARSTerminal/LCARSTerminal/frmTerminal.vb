@@ -240,7 +240,7 @@ Public Class frmTerminal
 
         abNewMenu = New ArrowButton()
         abNewMenu.Name = "abNewMenu"
-        abNewMenu.ArrowDirection = LCARS.LCARSarrowDirection.Right
+        abNewMenu.ArrowDirection = LCARS.LCARSarrowDirection.Left
         abNewMenu.Color = LCARS.LCARScolorStyles.PrimaryFunction
         abNewMenu.Beeping = True
         abNewMenu.Size = New Size(28, 28)
@@ -694,14 +694,22 @@ Public Class frmTerminal
 
     Protected Overrides Sub WndProc(ByRef m As Message)
         If WM_LCARS_OSK_INPUT <> 0 AndAlso m.Msg = WM_LCARS_OSK_INPUT Then
-            Dim view As ConsoleHostView = CurrentConsoleHost()
-            If view IsNot Nothing Then
-                Dim kind As Integer = m.WParam.ToInt32()
-                Dim payload As Integer = m.LParam.ToInt32() And &HFFFF
+            Dim kind As Integer = m.WParam.ToInt32()
+            Dim payload As Integer = m.LParam.ToInt32() And &HFFFF
+            If _uiMode = TerminalUiMode.Rdp AndAlso rdpWorkspace IsNot Nothing Then
                 If kind = OskInputChar Then
-                    view.InjectChar(ChrW(payload))
+                    rdpWorkspace.InjectChar(ChrW(payload))
                 ElseIf kind = OskInputVk Then
-                    view.InjectVirtualKey(CType(payload, Keys))
+                    rdpWorkspace.InjectVirtualKey(CType(payload, Keys))
+                End If
+            Else
+                Dim view As ConsoleHostView = CurrentConsoleHost()
+                If view IsNot Nothing Then
+                    If kind = OskInputChar Then
+                        view.InjectChar(ChrW(payload))
+                    ElseIf kind = OskInputVk Then
+                        view.InjectVirtualKey(CType(payload, Keys))
+                    End If
                 End If
             End If
             m.Result = New IntPtr(1)
@@ -744,7 +752,7 @@ Public Class frmTerminal
             UpdateNewTabCaption()
             status.Text = "READY"
         Else
-            status.Text = "RDP READY"
+            status.Text = "REMOTE READY"
             SyncRdpOptionsToPanel()
         End If
         LayoutChrome()

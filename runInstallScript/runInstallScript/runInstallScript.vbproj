@@ -92,6 +92,7 @@
     <Compile Include="ProgramVersions.vb" />
     <Compile Include="ShellFallback.vb" />
     <Compile Include="EarlyLog.vb" />
+    <Compile Include="cWrapExitWindows.vb" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Class1.resx">

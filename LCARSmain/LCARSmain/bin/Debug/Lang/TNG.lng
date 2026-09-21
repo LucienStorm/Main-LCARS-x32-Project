@@ -8,7 +8,7 @@ LCARS x32 Language File
         myDeactivate = "DEACTIVATE"
         myAlert = "RED ALERT"
         myDestruct = "AUTO DESTRUCT"
-        myPhoto = "IMAGING DATABANK"
+        myPhoto = "MEDIA DATABANK"
         myButtonManager = "CREWMAN PROGRAM PARAMETERS"
         myUserButtons = "CREWMAN PROGRAMS"
         myDocuments = "CREWMAN DATA"

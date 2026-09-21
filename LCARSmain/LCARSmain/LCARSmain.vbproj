@@ -192,6 +192,7 @@
     <Compile Include="Modules\modCommon.vb" />
     <Compile Include="Modules\modMediaFolders.vb" />
     <Compile Include="Modules\modMediaSession.vb" />
+    <Compile Include="Modules\modMediaStrip.vb" />
     <Compile Include="Modules\modShellFallback.vb" />
     <Compile Include="Modules\modSpeech.vb" />
     <Compile Include="Forms\frmQuickControls.vb" />

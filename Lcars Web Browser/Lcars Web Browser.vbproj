@@ -112,6 +112,8 @@
     <Compile Include="Sheets\SheetModel.vb" />
     <Compile Include="Sheets\XlsxIo.vb" />
     <Compile Include="Canvas\BoardModel.vb" />
+    <Compile Include="Canvas\BoardHistory.vb" />
+    <Compile Include="Canvas\CanvasMarkdownPainter.vb" />
     <Compile Include="Canvas\BoardViewport.vb">
       <SubType>Component</SubType>
     </Compile>

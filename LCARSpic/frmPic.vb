@@ -26,6 +26,7 @@ Public Class frmPic
     Private lblNowPlaying As Label
     Private fbPlayPause As LCARS.Controls.StandardButton
     Private fbSlideSettings As LCARS.Controls.StandardButton
+    Private fbRadio As LCARS.Controls.StandardButton
     Private chrome As ChromeController
     Private transport As MediaTransportControls
     Private mediaLoop As Boolean = False
@@ -84,10 +85,102 @@ Public Class frmPic
         AddHandler fbSlideSettings.Click, AddressOf SlideSettings_Click
         Controls.Add(fbSlideSettings)
 
+        fbRadio = New LCARS.Controls.StandardButton()
+        fbRadio.ButtonText = "RADIO"
+        fbRadio.Text = "RADIO"
+        fbRadio.Color = LCARS.LCARScolorStyles.PrimaryFunction
+        fbRadio.Size = New Size(130, 28)
+        fbRadio.Visible = True
+        AddHandler fbRadio.Click, AddressOf Radio_Click
+        Controls.Add(fbRadio)
+
         If StandardButton1 IsNot Nothing Then
             StandardButton1.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
             StandardButton1.Clickable = False
         End If
+    End Sub
+
+    Private Sub Radio_Click(ByVal sender As Object, ByVal e As EventArgs)
+        Using dlg As New frmRadioPicker()
+            If dlg.ShowDialog(Me) <> DialogResult.OK Then Return
+            If String.IsNullOrEmpty(dlg.SelectedUrl) Then Return
+            StartRadio(dlg.SelectedTitle, dlg.SelectedUrl)
+        End Using
+    End Sub
+
+    Private Sub StartRadio(ByVal title As String, ByVal url As String)
+        Try
+            EnsureVlcHost()
+            StopCurrentPlayback()
+            currentKind = MediaKind.Radio
+            currentPath = url
+            ApplyContentVisibility(MediaKind.Radio)
+            vlcHost.AttachVideoSurface(IntPtr.Zero)
+            If lblNowPlaying IsNot Nothing Then lblNowPlaying.Text = title.ToUpperInvariant()
+            vlcHost.PlayUrl(url)
+            RefreshTransportLabels()
+            MediaSessionIpc.BroadcastState(MediaKind.Radio, title, True, 0)
+            EnsureChromeController()
+            chrome.TransitionTo(MediaKind.Radio)
+            ApplyRightRailLayout()
+        Catch ex As Exception
+            MsgBox("Radio failed:" & vbCrLf & ex.Message, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS RADIO")
+        End Try
+    End Sub
+
+    ''' <summary>Bring the media window forward when a second launch hands off a file.</summary>
+    Public Sub ActivateFromShell()
+        If WindowState = FormWindowState.Minimized Then WindowState = FormWindowState.Normal
+        Show()
+        Activate()
+        BringToFront()
+        TopMost = True
+        TopMost = False
+        Focus()
+    End Sub
+
+    Protected Overrides Sub WndProc(ByRef m As Message)
+        Const WM_COPYDATA As Integer = &H4A
+        If m.Msg = WM_COPYDATA Then
+            Try
+                Dim cds As COPYDATASTRUCT = CType(Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, GetType(COPYDATASTRUCT)), COPYDATASTRUCT)
+                If cds.dwData.ToInt32() = MediaSessionIpc.MediaMagic AndAlso cds.lpData <> IntPtr.Zero AndAlso cds.cbData > 0 Then
+                    Dim bytes(cds.cbData - 1) As Byte
+                    Runtime.InteropServices.Marshal.Copy(cds.lpData, bytes, 0, cds.cbData)
+                    Dim payload As String = System.Text.Encoding.Unicode.GetString(bytes).TrimEnd(ChrW(0))
+                    If payload.StartsWith("CMD|", StringComparison.OrdinalIgnoreCase) Then
+                        Dim id As Integer = 0
+                        Integer.TryParse(payload.Substring(4), id)
+                        HandleShellMediaCommand(CType(id, MediaSessionIpc.MediaCommand))
+                        m.Result = New IntPtr(1)
+                        Return
+                    End If
+                End If
+            Catch
+            End Try
+        End If
+        MyBase.WndProc(m)
+    End Sub
+
+    <Runtime.InteropServices.StructLayout(Runtime.InteropServices.LayoutKind.Sequential)>
+    Private Structure COPYDATASTRUCT
+        Public dwData As IntPtr
+        Public cbData As Integer
+        Public lpData As IntPtr
+    End Structure
+
+    Private Sub HandleShellMediaCommand(ByVal cmd As MediaSessionIpc.MediaCommand)
+        Select Case cmd
+            Case MediaSessionIpc.MediaCommand.PlayPause
+                PlayPause_Click(Nothing, EventArgs.Empty)
+            Case MediaSessionIpc.MediaCommand.StopPlayback
+                TransportStop_Click(Nothing, EventArgs.Empty)
+            Case MediaSessionIpc.MediaCommand.ShowWindow
+                If Me.WindowState = FormWindowState.Minimized Then Me.WindowState = FormWindowState.Normal
+                Me.Show()
+                Me.Activate()
+                Me.BringToFront()
+        End Select
     End Sub
 
     Private Sub WireTransportHandlers()
@@ -110,14 +203,11 @@ Public Class frmPic
 
     Private Sub EnsureChromeController()
         If chrome IsNot Nothing Then Return
-        Dim avButtons As Control() = transport.Buttons.ToArray()
+        ' Keep zoom/NAV out of slide animation — they live in the touch-scroll rail.
+        Dim avButtons As Control() = New Control() {}
         Dim photoSet As New List(Of Control)()
         photoSet.Add(sbShow)
         photoSet.Add(fbSlideSettings)
-        photoSet.Add(fbZoomOut)
-        photoSet.Add(fbActual)
-        photoSet.Add(fbZoomIn)
-        photoSet.Add(pbZoom)
         chrome = New ChromeController(
             Me,
             photoSet.ToArray(),
@@ -130,6 +220,7 @@ Public Class frmPic
 
     Public Sub LoadMedia(ByVal path As String)
         If String.IsNullOrEmpty(path) Then Return
+        path = path.Trim().Trim(""""c)
         Dim kind As MediaKind = MediaKindUtil.DetectMediaKind(path)
         If kind = MediaKind.None Then
             If Directory.Exists(path) Then
@@ -147,28 +238,69 @@ Public Class frmPic
         Select Case kind
             Case MediaKind.Photo
                 LoadPhotoFolder(System.IO.Path.GetDirectoryName(path), path)
-            Case MediaKind.Music, MediaKind.Video
+            Case MediaKind.Music, MediaKind.Video, MediaKind.Radio
                 Try
-                    If vlcHost Is Nothing Then
-                        vlcHost = New VlcPlaybackHost()
-                        AddHandler vlcHost.PlaybackEnded, AddressOf Vlc_PlaybackEnded
-                        AddHandler vlcHost.TimeChanged, AddressOf Vlc_TimeChanged
-                    End If
+                    EnsureVlcHost()
                     If kind = MediaKind.Video Then
+                        ApplyContentVisibility(MediaKind.Video)
+                        pnlVideo.BringToFront()
+                        If Not pnlVideo.IsHandleCreated Then pnlVideo.CreateControl()
                         vlcHost.AttachVideoSurface(pnlVideo.Handle)
+                        If Not File.Exists(path) Then
+                            MsgBox("Media file not found (path missing or inaccessible):" & vbCrLf & path, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
+                            Return
+                        End If
+                        vlcHost.PlayFile(path)
+                        MediaSessionIpc.BroadcastState(kind, System.IO.Path.GetFileName(path), True, 0)
+                    ElseIf kind = MediaKind.Radio Then
+                        ApplyContentVisibility(MediaKind.Radio)
+                        vlcHost.AttachVideoSurface(IntPtr.Zero)
+                        lblNowPlaying.Text = path
+                        vlcHost.PlayUrl(path)
+                        MediaSessionIpc.BroadcastState(kind, path, True, 0)
                     Else
+                        If Not File.Exists(path) Then
+                            MsgBox("Media file not found (path missing or inaccessible):" & vbCrLf & path, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
+                            Return
+                        End If
                         vlcHost.AttachVideoSurface(IntPtr.Zero)
                         lblNowPlaying.Text = System.IO.Path.GetFileName(path)
+                        vlcHost.PlayFile(path)
+                        MediaSessionIpc.BroadcastState(kind, System.IO.Path.GetFileName(path), True, 0)
                     End If
-                    vlcHost.PlayFile(path)
                     RefreshTransportLabels()
-                    MediaSessionIpc.BroadcastState(kind, System.IO.Path.GetFileName(path), True, 0)
+                Catch ex As DirectoryNotFoundException
+                    MsgBox(ex.Message, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
+                Catch ex As FileNotFoundException
+                    MsgBox(ex.Message & If(String.IsNullOrEmpty(ex.FileName), "", vbCrLf & ex.FileName), MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
                 Catch ex As Exception
-                    MsgBox("Playback failed:" & vbCrLf & ex.Message, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
+                    MsgBox("Playback failed:" & vbCrLf & ex.Message & vbCrLf & path, MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
                 End Try
         End Select
         EnsureChromeController()
         chrome.TransitionTo(kind)
+    End Sub
+
+    Private Sub EnsureVlcHost()
+        If vlcHost IsNot Nothing Then Return
+        vlcHost = New VlcPlaybackHost()
+        AddHandler vlcHost.PlaybackEnded, AddressOf Vlc_PlaybackEnded
+        AddHandler vlcHost.TimeChanged, AddressOf Vlc_TimeChanged
+        AddHandler vlcHost.PlaybackFailed, AddressOf Vlc_PlaybackFailed
+    End Sub
+
+    Private Sub Vlc_PlaybackFailed(ByVal sender As Object, ByVal e As EventArgs)
+        If Not Me.IsHandleCreated Then Return
+        Dim host As VlcPlaybackHost = TryCast(sender, VlcPlaybackHost)
+        _pendingVlcError = If(host IsNot Nothing, host.LastError, "")
+        Me.BeginInvoke(New MethodInvoker(AddressOf ShowVlcPlaybackFailed))
+    End Sub
+
+    Private _pendingVlcError As String = ""
+
+    Private Sub ShowVlcPlaybackFailed()
+        MsgBox("LibVLC reported a playback error." & vbCrLf & _pendingVlcError & vbCrLf & currentPath,
+               MsgBoxStyle.OkOnly Or MsgBoxStyle.Exclamation, "LCARS MEDIA")
     End Sub
 
     ''' <summary>Load all images in a folder; optionally select a starting file.</summary>
@@ -205,23 +337,37 @@ Public Class frmPic
     End Sub
 
     Private Sub ApplyContentVisibility(ByVal kind As MediaKind)
+        Dim isPhoto As Boolean = (kind = MediaKind.Photo)
+        Dim isAv As Boolean = (kind = MediaKind.Music OrElse kind = MediaKind.Video OrElse kind = MediaKind.Radio)
         picturebox1.Visible = (kind = MediaKind.Photo OrElse kind = MediaKind.None)
         If pnlVideo IsNot Nothing Then pnlVideo.Visible = (kind = MediaKind.Video)
-        If pnlMusic IsNot Nothing Then pnlMusic.Visible = (kind = MediaKind.Music)
-        Dim isPhoto As Boolean = (kind = MediaKind.Photo)
-        Dim isAv As Boolean = (kind = MediaKind.Music OrElse kind = MediaKind.Video)
-        If transport IsNot Nothing Then transport.SetVisible(isAv, kind = MediaKind.Video)
+        If pnlMusic IsNot Nothing Then pnlMusic.Visible = (kind = MediaKind.Music OrElse kind = MediaKind.Radio)
+        If transport IsNot Nothing Then
+            If kind = MediaKind.Radio Then
+                ' Radio: compact A/V only (no seek chrome / video extras)
+                transport.SetVisible(False, False)
+                transport.PlayPause.Visible = True
+                transport.StopBtn.Visible = True
+                transport.Mute.Visible = True
+                transport.VolDown.Visible = True
+                transport.VolUp.Visible = True
+                transport.SeekBar.Visible = False
+                transport.TimeLabel.Visible = False
+            Else
+                transport.SetVisible(isAv, kind = MediaKind.Video)
+            End If
+        End If
         sbShow.Visible = isPhoto
         If fbSlideSettings IsNot Nothing Then fbSlideSettings.Visible = isPhoto
         fbZoomIn.Visible = isPhoto
         fbZoomOut.Visible = isPhoto
         fbActual.Visible = isPhoto
         pbZoom.Visible = isPhoto
-        ' NAV "+" is chrome — always visible (pan active for photos; decorative/ready for A/V).
         panel1.Visible = True
         Panel2.Visible = True
         If StandardButton1 IsNot Nothing Then StandardButton1.Visible = True
         If lblInfo IsNot Nothing Then lblInfo.Visible = isPhoto
+        If fbRadio IsNot Nothing Then fbRadio.Visible = True
     End Sub
 
     Private Sub ApplySlideshowTimerFromSettings()
@@ -371,12 +517,14 @@ Public Class frmPic
     End Sub
 
     ''' <summary>
-    ''' Right rail (bottom→up): CLOSE, BROWSE (+ photo slide), NAV disc+cross, zoom/transport.
-    ''' Right LCARS frame sits just left of the rail; Panel3 expands to that frame.
+    ''' Right rail: CLOSE/RADIO/BROWSE fixed at bottom; NAV disc fixed above them;
+    ''' zoom/transport scroll in the viewport above NAV.
     ''' </summary>
     Private Sub ApplyRightRailLayout()
         If sbBrowse Is Nothing OrElse sbExit Is Nothing Then Return
         If ClientSize.Width < 100 OrElse ClientSize.Height < 100 Then Return
+        EnsureRailScroll()
+        EnsureAlbumButtons()
 
         Const margin As Integer = 8
         Const gap As Integer = 6
@@ -384,17 +532,18 @@ Public Class frmPic
         Dim railW As Integer = Math.Max(100, sbBrowse.Width)
         Dim right As Integer = ClientSize.Width - margin
         Dim railLeft As Integer = right - railW
+        Dim titleBottom As Integer = If(tbTitle IsNot Nothing, tbTitle.Bottom + 4, 48)
 
-        ' --- CLOSE at bottom ---
+        ' --- Fixed: CLOSE at bottom ---
         sbExit.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         sbExit.Size = New Size(railW, 28)
         sbExit.Location = New Point(railLeft, ClientSize.Height - margin - sbExit.Height)
         sbExit.ButtonText = "CLOSE"
         sbExit.Text = "CLOSE"
 
-        Dim y As Integer = sbExit.Top - gap
+        Dim yFixed As Integer = sbExit.Top - gap
 
-        ' --- BROWSE / slideshow / slide set (directly above CLOSE) ---
+        ' --- Fixed: BROWSE / slideshow / slide set / RADIO ---
         sbShow.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         sbBrowse.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         sbShow.Size = New Size(railW, Math.Max(28, sbShow.Height))
@@ -402,80 +551,146 @@ Public Class frmPic
         If fbSlideSettings IsNot Nothing AndAlso fbSlideSettings.Visible Then
             fbSlideSettings.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
             fbSlideSettings.Size = New Size(railW, 28)
-            fbSlideSettings.Location = New Point(railLeft, y - fbSlideSettings.Height)
-            y = fbSlideSettings.Top - gap
+            fbSlideSettings.Location = New Point(railLeft, yFixed - fbSlideSettings.Height)
+            yFixed = fbSlideSettings.Top - gap
         End If
         If sbShow.Visible Then
-            sbShow.Location = New Point(railLeft, y - sbShow.Height)
-            y = sbShow.Top - gap
+            sbShow.Location = New Point(railLeft, yFixed - sbShow.Height)
+            yFixed = sbShow.Top - gap
         End If
-        sbBrowse.Location = New Point(railLeft, y - sbBrowse.Height)
-        y = sbBrowse.Top - gap
+        sbBrowse.Location = New Point(railLeft, yFixed - sbBrowse.Height)
+        yFixed = sbBrowse.Top - gap
 
-        ' --- NAV disc + full "+" cross (diameter = BROWSE width), directly above BROWSE ---
+        If fbRadio IsNot Nothing Then
+            fbRadio.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+            fbRadio.Size = New Size(railW, 28)
+            fbRadio.Location = New Point(railLeft, yFixed - fbRadio.Height)
+            fbRadio.Visible = True
+            fbRadio.BringToFront()
+            yFixed = fbRadio.Top - gap
+        End If
+
+        ' --- Fixed NAV disc on the right rail (form coords — never x=0 on the form) ---
+        Dim edge As Integer = Math.Max(28, CInt(Math.Round(railW * 0.3)))
+        Dim center As Integer = Math.Max(32, railW - edge * 2)
         Dim navSize As Integer = railW
-        Dim arm As Integer = Math.Max(22, CInt(Math.Round(navSize * 0.24)))
-        Dim navTop As Integer = y - navSize
-        Dim navLeft As Integer = railLeft
+        EnsureNavOnForm()
+        If fbNavCaption IsNot Nothing Then fbNavCaption.Visible = False
 
+        Dim navTop As Integer = yFixed - navSize
         If StandardButton1 IsNot Nothing Then
             StandardButton1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
             StandardButton1.ButtonStyle = LCARS.Controls.StandardButton.LCARSbuttonStyles.Pill
             StandardButton1.Size = New Size(navSize, navSize)
-            StandardButton1.Location = New Point(navLeft, navTop)
+            StandardButton1.Location = New Point(railLeft, navTop)
+            StandardButton1.Visible = True
             StandardButton1.SendToBack()
         End If
-
         panel1.Visible = True
         Panel2.Visible = True
-        Panel2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        Panel2.Size = New Size(navSize, arm)
-        Panel2.Location = New Point(navLeft, navTop + (navSize - arm) \ 2)
-        LayoutNavHorizontalArm(Panel2, arm)
-
         panel1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        panel1.Size = New Size(arm, navSize)
-        panel1.Location = New Point(navLeft + (navSize - arm) \ 2, navTop)
-        LayoutNavVerticalArm(panel1, arm)
-
+        Panel2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        panel1.Size = New Size(edge, navSize)
+        panel1.Location = New Point(railLeft + (navSize - edge) \ 2, navTop)
+        LayoutNavVerticalArm(panel1, edge, center)
+        Panel2.Size = New Size(navSize, edge)
+        Panel2.Location = New Point(railLeft, navTop + (navSize - edge) \ 2)
+        LayoutNavHorizontalArm(Panel2, edge, center)
         panel1.BringToFront()
         Panel2.BringToFront()
-        y = navTop - gap
+        yFixed = navTop - gap
 
-        ' --- Zoom pie + −/FULL/+ (photo) ---
-        If fbZoomOut.Visible OrElse pbZoom.Visible Then
+        ' --- Radio transport stays on the right form rail (never x=0 on the form) ---
+        Dim isRadio As Boolean = (currentKind = MediaKind.Radio)
+        If isRadio AndAlso transport IsNot Nothing Then
+            EnsureTransportOnForm()
+            Dim radioBtns As LCARS.Controls.StandardButton() = {
+                transport.PlayPause, transport.StopBtn, transport.Mute, transport.VolDown, transport.VolUp
+            }
+            For Each b As LCARS.Controls.StandardButton In radioBtns
+                If b Is Nothing OrElse Not b.Visible Then Continue For
+                b.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+                b.Size = New Size(railW, 28)
+                b.Location = New Point(railLeft, yFixed - b.Height)
+                b.BringToFront()
+                yFixed = b.Top - gap
+            Next
+        End If
+
+        ' --- Scroll viewport above fixed NAV (zoom / album / non-radio transport) ---
+        Dim showPn As Boolean = (currentKind = MediaKind.Photo)
+        Dim showZoom As Boolean = fbZoomOut.Visible OrElse pbZoom.Visible
+        Dim showTransport As Boolean = (Not isRadio) AndAlso (transport IsNot Nothing AndAlso transport.PlayPause.Visible)
+
+        Dim viewportTop As Integer = titleBottom + 4
+        Dim viewportBottom As Integer = yFixed
+        Dim viewportH As Integer = Math.Max(40, viewportBottom - viewportTop)
+        railScroll.PlaceViewport(railLeft, viewportTop, railW, viewportH)
+        EnsureRailChildren()
+
+        Dim contentH As Integer = gap
+        If showPn Then contentH += 28 + gap
+        If showZoom Then
+            Dim zoomH As Integer = Math.Max(28, CInt(Math.Round(railW * 0.28)))
+            Dim pieH As Integer = Math.Max(36, CInt(Math.Round(railW * 0.42)))
+            contentH += zoomH + 2 + pieH + gap
+        End If
+        If showTransport Then
+            Dim btnCount As Integer = 0
+            For Each b As LCARS.Controls.StandardButton In transport.Buttons
+                If b.Visible Then btnCount += 1
+            Next
+            contentH += btnCount * (28 + gap)
+        End If
+        contentH = Math.Max(contentH, viewportH)
+        railScroll.SetContentHeight(contentH)
+
+        Dim y As Integer = contentH - gap
+
+        fbAlbumPrev.Visible = showPn
+        fbAlbumNext.Visible = showPn
+        If showPn Then
+            fbAlbumNext.Size = New Size((railW - 4) \ 2, 28)
+            fbAlbumPrev.Size = New Size(railW - fbAlbumNext.Width - 4, 28)
+            fbAlbumNext.Location = New Point(fbAlbumPrev.Width + 4, y - fbAlbumNext.Height)
+            fbAlbumPrev.Location = New Point(0, fbAlbumNext.Top)
+            fbAlbumPrev.BringToFront()
+            fbAlbumNext.BringToFront()
+            y = fbAlbumPrev.Top - gap
+        End If
+
+        If showZoom Then
             Dim zoomH As Integer = Math.Max(28, CInt(Math.Round(railW * 0.28)))
             Dim zoomBtnW As Integer = (railW - 4) \ 3
-            fbZoomOut.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-            fbActual.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-            fbZoomIn.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-            pbZoom.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-
             fbZoomOut.Size = New Size(zoomBtnW, zoomH)
             fbActual.Size = New Size(zoomBtnW, zoomH)
             fbZoomIn.Size = New Size(railW - zoomBtnW * 2, zoomH)
-            fbZoomOut.Location = New Point(railLeft, y - zoomH)
-            fbActual.Location = New Point(fbZoomOut.Right + 2, fbZoomOut.Top)
-            fbZoomIn.Location = New Point(fbActual.Right + 2, fbZoomOut.Top)
+            fbZoomOut.Location = New Point(0, y - zoomH)
+            fbActual.Location = New Point(fbZoomOut.Width + 2, fbZoomOut.Top)
+            fbZoomIn.Location = New Point(fbActual.Left + fbActual.Width + 2, fbZoomOut.Top)
 
             Dim pieH As Integer = Math.Max(36, CInt(Math.Round(railW * 0.42)))
             pbZoom.Size = New Size(railW, pieH)
-            pbZoom.Location = New Point(railLeft, fbZoomOut.Top - 2 - pieH)
+            pbZoom.Location = New Point(0, fbZoomOut.Top - 2 - pieH)
             pbZoom.CircleRadius = railW \ 2
             pbZoom.CircleLocation = New Point(railW \ 2, pieH + railW \ 4)
+            fbZoomOut.BringToFront()
+            fbActual.BringToFront()
+            fbZoomIn.BringToFront()
+            pbZoom.BringToFront()
             y = pbZoom.Top - gap
         End If
 
-        ' --- A/V transport ---
-        If transport IsNot Nothing AndAlso transport.PlayPause.Visible Then
-            y = transport.LayoutAbove(railLeft, railW, y, gap)
+        If showTransport Then
+            y = transport.LayoutAbove(0, railW, y, gap)
         End If
 
-        ' --- Right LCARS frame immediately left of rail; expand media stage into the gap ---
+        railScroll.ResetScrollToBottom()
+
+        ' --- Right LCARS frame ---
         Dim elbowW As Integer = 72
         Dim frameLeft As Integer = railLeft - gap - frameBarW
         Dim elbowLeft As Integer = frameLeft - (elbowW - frameBarW)
-        Dim titleBottom As Integer = If(tbTitle IsNot Nothing, tbTitle.Bottom + 4, 48)
         Dim bottomChrome As Integer = ClientSize.Height - margin
 
         If Elbow4 IsNot Nothing Then
@@ -503,7 +718,6 @@ Public Class frmPic
             FlatButton6.Size = New Size(frameBarW, Math.Max(40, barBottom - barTop))
         End If
 
-        ' Panel3: fill between left chrome and right frame (was leaving a huge empty right gutter).
         Dim stageLeft As Integer = 90
         If FlatButton4 IsNot Nothing Then stageLeft = FlatButton4.Right + 8
         Dim stageRight As Integer = elbowLeft - gap
@@ -516,9 +730,7 @@ Public Class frmPic
         End If
 
         If lblInfo IsNot Nothing AndAlso lblInfo.Visible Then
-            lblInfo.Anchor = AnchorStyles.Top Or AnchorStyles.Right
-            lblInfo.Location = New Point(railLeft, titleBottom)
-            lblInfo.Size = New Size(railW, Math.Max(40, Math.Min(120, y - titleBottom - gap)))
+            lblInfo.Visible = False
         End If
 
         If transport IsNot Nothing AndAlso transport.SeekBar.Visible AndAlso Panel3 IsNot Nothing Then
@@ -527,60 +739,127 @@ Public Class frmPic
 
         sbBrowse.BringToFront()
         sbShow.BringToFront()
+        If fbRadio IsNot Nothing Then fbRadio.BringToFront()
         If fbSlideSettings IsNot Nothing AndAlso fbSlideSettings.Visible Then fbSlideSettings.BringToFront()
         panel1.BringToFront()
         Panel2.BringToFront()
-        fbZoomOut.BringToFront()
-        fbActual.BringToFront()
-        fbZoomIn.BringToFront()
-        pbZoom.BringToFront()
+        railScroll.ViewportControl.BringToFront()
         sbExit.BringToFront()
     End Sub
 
-    Private Sub LayoutNavHorizontalArm(ByVal host As Panel, ByVal arm As Integer)
-        If host Is Nothing Then Return
-        Dim w As Integer = host.Width
-        Dim btnH As Integer = Math.Max(18, arm - 4)
-        Dim top As Integer = Math.Max(0, (host.Height - btnH) \ 2)
-        Dim side As Integer = Math.Max(18, CInt(w * 0.16))
-        Dim midW As Integer = Math.Max(24, w - side * 2 - 8)
-
-        abPrev.Size = New Size(side, btnH)
-        abPrev.Location = New Point(2, top)
-        lft.Size = New Size(Math.Max(14, side - 4), btnH)
-        lft.Location = New Point(abPrev.Right + 1, top)
-        FlatButton1.Size = New Size(midW, btnH)
-        FlatButton1.Location = New Point((w - midW) \ 2, top)
-        FlatButton13.Size = New Size(Math.Max(12, side \ 2), btnH)
-        FlatButton13.Location = New Point(FlatButton1.Right + 1, top)
-        rht.Size = New Size(Math.Max(14, side - 4), btnH)
-        rht.Location = New Point(w - side - 2 - rht.Width, top)
-        abNext.Size = New Size(side, btnH)
-        abNext.Location = New Point(w - side - 1, top)
+    ''' <summary>NAV disc stays on the form at right-rail coords; pull it back if it was reparented into the scroll panel.</summary>
+    Private Sub EnsureNavOnForm()
+        If StandardButton1 IsNot Nothing AndAlso StandardButton1.Parent IsNot Me Then
+            StandardButton1.Parent = Me
+        End If
+        If panel1 IsNot Nothing AndAlso panel1.Parent IsNot Me Then
+            panel1.Parent = Me
+        End If
+        If Panel2 IsNot Nothing AndAlso Panel2.Parent IsNot Me Then
+            Panel2.Parent = Me
+        End If
     End Sub
 
-    Private Sub LayoutNavVerticalArm(ByVal host As Panel, ByVal arm As Integer)
-        If host Is Nothing Then Return
-        Dim h As Integer = host.Height
-        Dim btnW As Integer = Math.Max(18, arm - 4)
-        Dim left As Integer = Math.Max(0, (host.Width - btnW) \ 2)
-        Dim side As Integer = Math.Max(18, CInt(h * 0.16))
-        Dim midH As Integer = Math.Max(24, h - side * 2 - 8)
+    Private Sub EnsureTransportOnForm()
+        If transport Is Nothing Then Return
+        For Each b As LCARS.Controls.StandardButton In transport.Buttons
+            If b IsNot Nothing AndAlso b.Parent IsNot Me Then b.Parent = Me
+        Next
+    End Sub
 
-        ArrowButton1.Size = New Size(btnW, side)
-        ArrowButton1.Location = New Point(left, 1)
-        up.Size = New Size(btnW, Math.Max(14, side - 2))
-        up.Location = New Point(left, ArrowButton1.Bottom + 1)
-        FlatButton2.Size = New Size(host.Width, Math.Min(midH, 28))
-        FlatButton2.Location = New Point(0, (h - FlatButton2.Height) \ 2)
-        FlatButton8.Size = New Size(btnW, midH)
-        FlatButton8.Location = New Point(left, FlatButton2.Top - 4)
-        FlatButton8.SendToBack()
-        dwn.Size = New Size(btnW, Math.Max(14, side - 2))
-        dwn.Location = New Point(left, h - side - dwn.Height - 1)
-        ArrowButton2.Size = New Size(btnW, side)
-        ArrowButton2.Location = New Point(left, h - side - 1)
+    Private railScroll As RailScrollPanel
+    Private fbNavCaption As LCARS.Controls.FlatButton
+    Private fbAlbumPrev As LCARS.Controls.StandardButton
+    Private fbAlbumNext As LCARS.Controls.StandardButton
+
+    Private Sub EnsureRailScroll()
+        If railScroll IsNot Nothing Then Return
+        railScroll = New RailScrollPanel(Me)
+    End Sub
+
+    Private Sub EnsureRailChildren()
+        EnsureRailScroll()
+        ' Zoom + non-radio transport scroll inside the right viewport.
+        railScroll.Adopt(fbZoomOut)
+        railScroll.Adopt(fbActual)
+        railScroll.Adopt(fbZoomIn)
+        railScroll.Adopt(pbZoom)
+        If transport Is Nothing Then Return
+        If currentKind = MediaKind.Radio Then Return
+        For Each b As LCARS.Controls.StandardButton In transport.Buttons
+            railScroll.Adopt(b)
+        Next
+    End Sub
+
+    Private Sub EnsureAlbumButtons()
+        If fbAlbumPrev IsNot Nothing Then Return
+        EnsureRailScroll()
+        fbAlbumPrev = New LCARS.Controls.StandardButton()
+        fbAlbumPrev.ButtonText = "PREV"
+        fbAlbumPrev.Text = "PREV"
+        fbAlbumPrev.Color = LCARS.LCARScolorStyles.SystemFunction
+        AddHandler fbAlbumPrev.Click, AddressOf AlbumPrev_Click
+        railScroll.Adopt(fbAlbumPrev)
+        fbAlbumNext = New LCARS.Controls.StandardButton()
+        fbAlbumNext.ButtonText = "NEXT"
+        fbAlbumNext.Text = "NEXT"
+        fbAlbumNext.Color = LCARS.LCARScolorStyles.SystemFunction
+        AddHandler fbAlbumNext.Click, AddressOf AlbumNext_Click
+        railScroll.Adopt(fbAlbumNext)
+    End Sub
+
+    Private Sub LayoutNavHorizontalArm(ByVal host As Panel, ByVal edge As Integer, ByVal center As Integer)
+        If host Is Nothing Then Return
+        ' Equal left/right ArrowButtons for pan; hide leftover decorative segments that skewed size/color.
+        If FlatButton13 IsNot Nothing Then FlatButton13.Visible = False
+        If FlatButton1 IsNot Nothing Then FlatButton1.Visible = False
+        If lft IsNot Nothing Then lft.Visible = False
+        If rht IsNot Nothing Then rht.Visible = False
+
+        Dim top As Integer = Math.Max(0, (host.Height - edge) \ 2)
+        abPrev.Visible = True
+        abNext.Visible = True
+        abPrev.ArrowDirection = LCARS.LCARSarrowDirection.Left
+        abNext.ArrowDirection = LCARS.LCARSarrowDirection.Right
+        abPrev.Color = LCARS.LCARScolorStyles.SystemFunction
+        abNext.Color = LCARS.LCARScolorStyles.SystemFunction
+        abPrev.Size = New Size(edge, edge)
+        abNext.Size = New Size(edge, edge)
+        abPrev.Location = New Point(0, top)
+        abNext.Location = New Point(host.Width - edge, top)
+        abPrev.BringToFront()
+        abNext.BringToFront()
+    End Sub
+
+    Private Sub LayoutNavVerticalArm(ByVal host As Panel, ByVal edge As Integer, ByVal center As Integer)
+        If host Is Nothing Then Return
+        If FlatButton8 IsNot Nothing Then FlatButton8.Visible = False
+        If up IsNot Nothing Then up.Visible = False
+        If dwn IsNot Nothing Then dwn.Visible = False
+
+        Dim left As Integer = Math.Max(0, (host.Width - edge) \ 2)
+        ArrowButton1.Visible = True
+        ArrowButton2.Visible = True
+        ArrowButton1.ArrowDirection = LCARS.LCARSarrowDirection.Up
+        ArrowButton2.ArrowDirection = LCARS.LCARSarrowDirection.Down
+        ArrowButton1.Color = LCARS.LCARScolorStyles.SystemFunction
+        ArrowButton2.Color = LCARS.LCARScolorStyles.SystemFunction
+        ArrowButton1.Size = New Size(edge, edge)
+        ArrowButton2.Size = New Size(edge, edge)
+        ArrowButton1.Location = New Point(left, 0)
+        ArrowButton2.Location = New Point(left, host.Height - edge)
+
+        FlatButton2.Visible = True
+        FlatButton2.ButtonText = "NAV"
+        FlatButton2.Text = "NAV"
+        FlatButton2.ButtonTextAlign = ContentAlignment.MiddleCenter
+        FlatButton2.Clickable = False
+        FlatButton2.Color = LCARS.LCARScolorStyles.NavigationFunction
+        FlatButton2.Size = New Size(center, center)
+        FlatButton2.Location = New Point(Math.Max(0, (host.Width - center) \ 2), Math.Max(0, (host.Height - center) \ 2))
         FlatButton2.BringToFront()
+        ArrowButton1.BringToFront()
+        ArrowButton2.BringToFront()
     End Sub
 
     Private Sub frmPic_Resize(ByVal sender As Object, ByVal e As EventArgs) Handles Me.Resize
@@ -709,28 +988,24 @@ Public Class frmPic
         End Using
     End Sub
 
-    Private Sub abNext_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles abNext.Click
-
+    Private Sub AlbumNext_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
+        If myFiles.Count = 0 Then Return
         If index + 1 > myFiles.Count Then
-            ''we're past the end of the array, so start over
             index = 1
         Else
             index += 1
         End If
-
         loadImages(index)
     End Sub
 
-    Private Sub abPrev_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles abPrev.Click
-
+    Private Sub AlbumPrev_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
+        If myFiles.Count = 0 Then Return
         picturebox1.SizeMode = PictureBoxSizeMode.Zoom
-
         If index > 1 Then
             index -= 1
         Else
             index = myFiles.Count
         End If
-
         loadImages(index)
     End Sub
 
@@ -776,26 +1051,6 @@ Public Class frmPic
 
 
 
-    Private Sub ArrowButton1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ArrowButton1.Click
-
-
-        If picturebox1.Image IsNot Nothing Then
-            picturebox1.Image.RotateFlip(RotateFlipType.Rotate180FlipNone)
-            picturebox1.Refresh()
-        End If
-
-    End Sub
-
-    Private Sub ArrowButton2_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ArrowButton2.Click
-
-        If picturebox1.Image IsNot Nothing Then
-            picturebox1.Image.RotateFlip(RotateFlipType.Rotate180FlipNone)
-            picturebox1.Refresh()
-        End If
-
-    End Sub
-
-
     Private Sub sbExit_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbExit.Click
         StopCurrentPlayback()
         If chrome IsNot Nothing Then
@@ -809,28 +1064,33 @@ Public Class frmPic
         Me.Close()
     End Sub
 
-    Private shiftButton As LCARS.Controls.FlatButton
+    Private shiftControl As Control
 
-    Private Sub shiftButtonDown(ByVal sender As Object, ByVal e As EventArgs) Handles up.MouseDown, dwn.MouseDown, lft.MouseDown, rht.MouseDown
+    Private Sub shiftButtonDown(ByVal sender As Object, ByVal e As EventArgs) Handles _
+        up.MouseDown, dwn.MouseDown, lft.MouseDown, rht.MouseDown, _
+        ArrowButton1.MouseDown, ArrowButton2.MouseDown, abPrev.MouseDown, abNext.MouseDown
         If picturebox1.Image Is Nothing Then Return
-        shiftButton = DirectCast(sender, LCARS.Controls.FlatButton)
+        shiftControl = DirectCast(sender, Control)
         tmrShift.Start()
         shiftTimer_Tick(sender, e)
     End Sub
 
-    Private Sub shiftButtonUp(ByVal sender As Object, ByVal e As EventArgs) Handles up.MouseUp, dwn.MouseUp, lft.MouseUp, rht.MouseUp
+    Private Sub shiftButtonUp(ByVal sender As Object, ByVal e As EventArgs) Handles _
+        up.MouseUp, dwn.MouseUp, lft.MouseUp, rht.MouseUp, _
+        ArrowButton1.MouseUp, ArrowButton2.MouseUp, abPrev.MouseUp, abNext.MouseUp
         tmrShift.Stop()
-        shiftButton = Nothing
+        shiftControl = Nothing
     End Sub
 
     Private Sub shiftTimer_Tick(ByVal sender As Object, ByVal e As EventArgs) Handles tmrShift.Tick
-        If shiftButton Is up Then
+        If shiftControl Is Nothing Then Return
+        If shiftControl Is up OrElse shiftControl Is ArrowButton1 Then
             picturebox1.Top += shiftDelta
-        ElseIf shiftButton Is dwn Then
+        ElseIf shiftControl Is dwn OrElse shiftControl Is ArrowButton2 Then
             picturebox1.Top -= shiftDelta
-        ElseIf shiftButton Is lft Then
+        ElseIf shiftControl Is lft OrElse shiftControl Is abPrev Then
             picturebox1.Left += shiftDelta
-        ElseIf shiftButton Is rht Then
+        ElseIf shiftControl Is rht OrElse shiftControl Is abNext Then
             picturebox1.Left -= shiftDelta
         End If
     End Sub

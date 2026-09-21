@@ -1157,13 +1157,30 @@ public Class modBusiness
                        & vbNewLine & vbNewLine & "LCARS x32 will use the default button text instead.")
             End If
             FileClose(1)
-
         Catch ex As Exception
             MsgBox("error" & vbNewLine & ex.ToString())
             FileClose(1)
         End Try
 
+        EnsureMediaViewerButtonLabel()
         ApplyMediaFolderLabels(myForm)
+    End Sub
+
+    ''' <summary>
+    ''' Language files historically labeled this control "PHOTO VIEWER" / "IMAGING DATABANK".
+    ''' Always apply the Media Viewer label after language load so Start Menu stays correct
+    ''' even when Lang\Standard.lng on the tablet is still the old file.
+    ''' </summary>
+    Private Sub EnsureMediaViewerButtonLabel()
+        If myPhoto Is Nothing Then Return
+        Dim cur As String = If(myPhoto.ButtonText, "").Trim()
+        If cur.Equals("IMAGING DATABANK", StringComparison.OrdinalIgnoreCase) OrElse
+           cur.Equals("MEDIA DATABANK", StringComparison.OrdinalIgnoreCase) Then
+            myPhoto.ButtonText = "MEDIA DATABANK"
+        Else
+            myPhoto.ButtonText = "Media Viewer"
+        End If
+        myPhoto.Text = myPhoto.ButtonText
     End Sub
 
 #Region " Tray Icon Handling "

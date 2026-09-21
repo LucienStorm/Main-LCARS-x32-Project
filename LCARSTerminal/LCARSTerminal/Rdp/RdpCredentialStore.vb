@@ -13,12 +13,21 @@ Public Class RdpCredentialStore
     Private Const CredPersistLocalMachine As Integer = 2
 
     Public Shared Function TargetName(ByVal profileId As Guid) As String
+        Return "LCARSTerminal/Remote/" & profileId.ToString("N")
+    End Function
+
+    Public Shared Function LegacyRdpTargetName(ByVal profileId As Guid) As String
         Return "LCARSTerminal/RDP/" & profileId.ToString("N")
     End Function
 
     Public Function TryGetPassword(ByVal profileId As Guid, ByRef password As String) As Boolean
         password = Nothing
-        Dim target As String = TargetName(profileId)
+        If TryReadTarget(TargetName(profileId), password) Then Return True
+        Return TryReadTarget(LegacyRdpTargetName(profileId), password)
+    End Function
+
+    Private Function TryReadTarget(ByVal target As String, ByRef password As String) As Boolean
+        password = Nothing
         Dim credPtr As IntPtr = IntPtr.Zero
         Try
             If Not CredRead(target, CredTypeGeneric, 0, credPtr) Then
@@ -45,7 +54,7 @@ Public Class RdpCredentialStore
             cred.Flags = 0
             cred.Type = CredTypeGeneric
             cred.TargetName = target
-            cred.Comment = "LCARS Terminal RDP"
+            cred.Comment = "LCARS Terminal Remote"
             cred.CredentialBlobSize = CUInt(blob.Length)
             cred.CredentialBlob = blobHandle.AddrOfPinnedObject()
             cred.Persist = CredPersistLocalMachine
@@ -60,6 +69,7 @@ Public Class RdpCredentialStore
 
     Public Sub DeletePassword(ByVal profileId As Guid)
         CredDelete(TargetName(profileId), CredTypeGeneric, 0)
+        CredDelete(LegacyRdpTargetName(profileId), CredTypeGeneric, 0)
     End Sub
 
     <StructLayout(LayoutKind.Sequential, CharSet:=CharSet.Unicode)> _

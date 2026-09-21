@@ -227,7 +227,7 @@ Partial Class frmMainscreen2
         '
         'myPhoto
         '
-        Me.myPhoto.ButtonText = "PHOTO VIEWER"
+        Me.myPhoto.ButtonText = "Media Viewer"
         Me.myPhoto.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
         Me.myPhoto.Color = LCARS.LCARScolorStyles.SystemFunction
         Me.myPhoto.Location = New System.Drawing.Point(133, 33)
@@ -235,7 +235,7 @@ Partial Class frmMainscreen2
         Me.myPhoto.Size = New System.Drawing.Size(127, 28)
         Me.myPhoto.TabIndex = 51
         Me.myPhoto.Tag = "14"
-        Me.myPhoto.Text = "PHOTO VIEWER"
+        Me.myPhoto.Text = "Media Viewer"
         '
         'myComp
         '

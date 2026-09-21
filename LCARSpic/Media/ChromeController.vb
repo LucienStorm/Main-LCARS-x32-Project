@@ -207,7 +207,7 @@ Public Class ChromeController
         Select Case kind
             Case MediaKind.Video
                 Return 96
-            Case MediaKind.Music
+            Case MediaKind.Music, MediaKind.Radio
                 Return 56
             Case MediaKind.Photo
                 Return 72
@@ -220,7 +220,7 @@ Public Class ChromeController
         Select Case kind
             Case MediaKind.Photo
                 Return photoControls
-            Case MediaKind.Music
+            Case MediaKind.Music, MediaKind.Radio
                 Return musicControls
             Case MediaKind.Video
                 Return videoControls

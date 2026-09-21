@@ -51,31 +51,46 @@ Public Class frmNetworkCredentials
         StartPosition = FormStartPosition.CenterParent
         BackColor = Color.Black
         ForeColor = Color.Orange
-        ClientSize = New Size(420, 240)
+        ClientSize = New Size(460, 300)
         MaximizeBox = False
         MinimizeBox = False
         ShowInTaskbar = False
 
+        Dim hostLabel As String = If((String.IsNullOrEmpty(hostHint) OrElse hostHint.Trim().Length = 0), "SMB ACCESS", "SMB: " & hostHint)
         Dim lblHost As New Label() With {
-            .Text = If((String.IsNullOrEmpty(hostHint) OrElse hostHint.Trim().Length = 0), "SMB ACCESS", "SMB: " & hostHint),
+            .Text = hostLabel,
             .ForeColor = Color.Orange,
             .Location = New Point(20, 12),
             .AutoSize = True
         }
         Dim lblUser As New Label() With {.Text = "USERNAME", .ForeColor = Color.Orange, .Location = New Point(20, 40), .AutoSize = True}
-        Dim lblPass As New Label() With {.Text = "PASSWORD", .ForeColor = Color.Orange, .Location = New Point(20, 90), .AutoSize = True}
-        txtUser.Location = New Point(20, 60)
-        txtUser.Size = New Size(380, 24)
+        Dim lblHint As New Label() With {
+            .Text = "Format: HOST\user   or   user   or   DOMAIN\user" & vbCrLf &
+                    "(/ is converted to \). Samba: use the share account, often HOST\username.",
+            .ForeColor = Color.FromArgb(200, 160, 80),
+            .Location = New Point(20, 58),
+            .Size = New Size(420, 40)
+        }
+        Dim lblPass As New Label() With {.Text = "PASSWORD", .ForeColor = Color.Orange, .Location = New Point(20, 138), .AutoSize = True}
+
+        txtUser.Location = New Point(20, 108)
+        txtUser.Size = New Size(420, 24)
         txtUser.BackColor = Color.FromArgb(40, 40, 40)
         txtUser.ForeColor = Color.White
-        txtPass.Location = New Point(20, 110)
-        txtPass.Size = New Size(380, 24)
+        If Not String.IsNullOrEmpty(hostHint) Then
+            txtUser.Text = hostHint & "\"
+            txtUser.SelectionStart = txtUser.Text.Length
+        End If
+
+        txtPass.Location = New Point(20, 158)
+        txtPass.Size = New Size(420, 24)
         txtPass.UseSystemPasswordChar = True
         txtPass.BackColor = Color.FromArgb(40, 40, 40)
         txtPass.ForeColor = Color.White
+
         chkRemember.Text = "REMEMBER (WINDOWS CREDENTIAL MANAGER)"
         chkRemember.ForeColor = Color.Orange
-        chkRemember.Location = New Point(20, 145)
+        chkRemember.Location = New Point(20, 195)
         chkRemember.AutoSize = True
         chkRemember.BackColor = Color.Black
 
@@ -83,7 +98,7 @@ Public Class frmNetworkCredentials
         fbOk.Text = "CONNECT"
         fbOk.Color = LCARS.LCARScolorStyles.PrimaryFunction
         fbOk.Size = New Size(120, 28)
-        fbOk.Location = New Point(160, 190)
+        fbOk.Location = New Point(200, 250)
         fbOk.Beeping = True
         AddHandler fbOk.Click, AddressOf OnOk
 
@@ -91,12 +106,13 @@ Public Class frmNetworkCredentials
         fbCancel.Text = "CANCEL"
         fbCancel.Color = LCARS.LCARScolorStyles.NavigationFunction
         fbCancel.Size = New Size(120, 28)
-        fbCancel.Location = New Point(290, 190)
+        fbCancel.Location = New Point(330, 250)
         fbCancel.Beeping = True
         AddHandler fbCancel.Click, AddressOf OnCancel
 
         Controls.Add(lblHost)
         Controls.Add(lblUser)
+        Controls.Add(lblHint)
         Controls.Add(txtUser)
         Controls.Add(lblPass)
         Controls.Add(txtPass)
