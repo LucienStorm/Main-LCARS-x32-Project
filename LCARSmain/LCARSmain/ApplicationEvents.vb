@@ -15,8 +15,11 @@ Namespace My
         Private isSettings As Boolean = False
 
         Private Sub MyApplication_Startup(ByVal sender As Object, ByVal e As Microsoft.VisualBasic.ApplicationServices.StartupEventArgs) Handles Me.Startup
-            modDiagnostics.LogStartupBanner()
+            ' Install global exception handlers FIRST, before any other code, so we
+            ' capture crashes that occur before modDiagnostics installs its own hooks.
             AddHandler System.Windows.Forms.Application.ThreadException, AddressOf Application_ThreadException
+            AddHandler AppDomain.CurrentDomain.UnhandledException, AddressOf OnAppDomainUnhandledException
+            modDiagnostics.LogStartupBanner()
             ' Winlogon may respawn LCARS mid-install. Exit immediately so we do not
             ' prewarm OSK / lock USB binaries while runInstallScript is copying.
             ' A hard reboot leaves the flag behind with no installer — that used to
@@ -45,7 +48,8 @@ Namespace My
                     End
                 End If
             Else
-                'Run as shell
+                'Run as shell. Drop the restart flag so a later exit can still restore Explorer.
+                modShellFallback.ClearPendingShellRestart()
                 Dim x32Processes() As Process = Process.GetProcessesByName("LCARSmain")
                 If x32Processes.Length > 1 Then
                     InterMsgID = frmStartup.RegisterWindowMessage("LCARS_X32_MSG")
@@ -128,6 +132,32 @@ Namespace My
 
         Private Sub Application_ThreadException(ByVal sender As Object, ByVal e As Threading.ThreadExceptionEventArgs)
             modDiagnostics.LogException("ThreadException", e.Exception)
+            If modShellFallback.IsLcarsRegisteredShell() Then
+                modShellFallback.CleanupOrphanShellProcesses()
+            Else
+                modShellFallback.EnsureExplorerRunningIfNeeded()
+            End If
+        End Sub
+
+        Private Sub OnAppDomainUnhandledException(ByVal sender As Object, ByVal e As UnhandledExceptionEventArgs)
+            Try
+                Dim logPath As String = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LCARS_Crash.log")
+                Dim exObj As Object = e.ExceptionObject
+                Dim msg As String = If(exObj Is Nothing, "null", exObj.ToString())
+                Dim sb As New System.Text.StringBuilder()
+                sb.AppendLine("yyyy-MM-dd HH:mm:ss")
+                sb.AppendLine("AppDomain.UnhandledException :: isTerminating=" & e.IsTerminating.ToString())
+                sb.AppendLine(msg)
+                Dim st As String = ""
+                If exObj IsNot Nothing Then
+                    Dim ex As Exception = TryCast(exObj, Exception)
+                    If ex IsNot Nothing Then st = ex.StackTrace
+                End If
+                sb.AppendLine(st)
+                System.IO.File.AppendAllText(logPath, sb.ToString() & vbCrLf & vbCrLf)
+            Catch
+            End Try
+            modDiagnostics.LogException("AppDomain.UnhandledException", TryCast(e.ExceptionObject, Exception))
             If modShellFallback.IsLcarsRegisteredShell() Then
                 modShellFallback.CleanupOrphanShellProcesses()
             Else

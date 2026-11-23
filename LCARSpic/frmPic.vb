@@ -976,11 +976,11 @@ Public Class frmPic
                 startDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)
             ElseIf currentKind = MediaKind.Video Then
                 startDir = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)
-            End If
+                End If
             If Not String.IsNullOrEmpty(currentPath) Then
                 Dim parent As String = System.IO.Path.GetDirectoryName(currentPath)
                 If Directory.Exists(parent) Then startDir = parent
-            End If
+        End If
             dlg.InitialDirectory = startDir
             If dlg.ShowDialog(Me) <> DialogResult.OK Then Return
             If String.IsNullOrEmpty(dlg.FileName) OrElse Not File.Exists(dlg.FileName) Then Return

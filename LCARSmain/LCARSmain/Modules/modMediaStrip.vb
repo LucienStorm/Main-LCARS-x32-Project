@@ -16,6 +16,10 @@ Friend Module modMediaStrip
     Private Const StripHeight As Integer = 22
     Private ReadOnly attached As New HashSet(Of Integer)()
 
+    Public Sub DetachScreen(ByVal screenIndex As Integer)
+        attached.Remove(screenIndex)
+    End Sub
+
     Public Sub SyncWithWeather(ByVal b As modBusiness, ByVal weather As Control, ByVal headerMode As Boolean)
         If b Is Nothing OrElse b.myForm Is Nothing Then Return
         If Not modMediaSession.HasActiveSession Then

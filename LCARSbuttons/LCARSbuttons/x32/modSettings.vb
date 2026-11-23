@@ -1,4 +1,4 @@
-﻿Option Strict On
+Option Strict On
 
 Imports System.IO
 
@@ -257,6 +257,15 @@ Label072:
             End Get
             Set(ByVal value As Boolean)
                 SaveSetting("LCARS x32", "Application", "DDEEnabled", CStr(value))
+            End Set
+        End Property
+
+        Public Shared Property KlingonTerranTranslations() As Boolean
+            Get
+                Return CBool(GetSetting("LCARS x32", "Application", "KlingonTerranTranslations", "FALSE"))
+            End Get
+            Set(ByVal value As Boolean)
+                SaveSetting("LCARS x32", "Application", "KlingonTerranTranslations", CStr(value))
             End Set
         End Property
 

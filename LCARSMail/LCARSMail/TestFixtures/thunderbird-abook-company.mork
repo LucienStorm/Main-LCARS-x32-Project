@@ -1,0 +1,4 @@
+// <! <(meta 1)> // (f=iso-8859-1)
+// Company column map (slice 13)
+(k=^40^PrimaryEmail^41^DisplayName^42^Company)
+@8=^40^company@example.com^41^Company User^42^Acme Corp

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>9.0.21022</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <StartupObject>LCARSutilities.Program</StartupObject>
+    <RootNamespace>LCARSutilities</RootNamespace>
+    <AssemblyName>LCARSutilities</AssemblyName>
+    <MyType>WindowsFormsWithCustomSubMain</MyType>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Debug\</OutputPath>
+    <PlatformTarget>x86</PlatformTarget>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <PlatformTarget>x86</PlatformTarget>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Security" />
+  </ItemGroup>
+  <ItemGroup>
+    <Import Include="Microsoft.VisualBasic" />
+    <Import Include="System" />
+    <Import Include="System.Collections" />
+    <Import Include="System.Collections.Generic" />
+    <Import Include="System.Drawing" />
+    <Import Include="System.Diagnostics" />
+    <Import Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.vb" />
+    <Compile Include="Modules\CalcEngine.vb" />
+    <Compile Include="Modules\WeatherClient.vb" />
+    <Compile Include="Modules\modUtilities.vb" />
+    <Compile Include="Forms\GraphCanvas.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Forms\frmCalculator.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\frmTimer.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\frmScreenshot.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\frmWeather.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\frmCalendar.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\frmTaskEditor.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Controls\CalendarMonthGrid.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Forms\frmRss.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\frmChat.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Modules\IcsCalendarStore.vb" />
+    <Compile Include="Modules\MailAttendeeHint.vb" />
+    <Compile Include="Modules\CalDavTaskPush.vb" />
+    <Compile Include="Modules\CalDavCalendarSync.vb" />
+    <Compile Include="Modules\CalendarRecurrence.vb" />
+    <Compile Include="Modules\EwsCalendarDeleteQueue.vb" />
+    <Compile Include="Modules\EwsCalendarRsvpQueue.vb" />
+    <Compile Include="Modules\CalendarMeetingReplyQueue.vb" />
+    <Compile Include="Modules\RssFeedParser.vb" />
+    <Compile Include="Modules\RssFeedStore.vb" />
+    <Compile Include="Modules\IrcClient.vb" />
+    <Compile Include="Modules\RssItem.vb" />
+    <Compile Include="Modules\CalendarEvent.vb" />
+    <Compile Include="My Project\AssemblyInfo.vb" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\LCARSbuttons\LCARSbuttons\LCARSbuttons.vbproj">
+      <Project>{D3ED0098-5647-4C53-B87C-DFBD8BDE7FE5}</Project>
+      <Name>LCARSbuttons</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.VisualBasic.targets" />
+</Project>

@@ -19,6 +19,8 @@ Namespace Controls
         Dim oldMouseMoveControl As ILightweightControl
         Dim oldMouseDownPoint As Point
         Dim oldMouseDownControl As ILightweightControl
+        Dim pressedClickSent As Boolean
+        Private Const TouchSlopPx As Integer = 24
         Dim _beeping As Boolean = GetSetting("LCARS x32", "Application", "ButtonBeep", "TRUE")
         Dim WithEvents _colorsAvailable As New LCARS.LCARScolor
         'Events
@@ -96,23 +98,59 @@ Namespace Controls
         'Passes MouseDown events to the child controls
         Private Sub Me_MouseDown(ByVal sender As Object, ByVal e As MouseEventArgs) Handles Me.MouseDown
             oldMouseDownPoint = e.Location
+            pressedClickSent = False
             oldMouseDownControl = ControlFromPoint(e.Location)
             If oldMouseDownControl IsNot Nothing Then
+                ' Keep MouseUp even if the panel is hidden/moved mid-tap (Start Menu close).
+                Me.Capture = True
                 oldMouseDownControl.doEvent(ILightweightControl.LightweightEvents.MouseDown)
             End If
         End Sub
-        'Passes MouseUp and click events to the child controls if applicable
+        'Passes MouseUp and click events to the child controls if applicable.
+        'A finger tap rarely lands on the same pixel as the press, so allow a small slop.
         Private Sub Me_MouseUp(ByVal sender As Object, ByVal e As MouseEventArgs) Handles Me.MouseUp
             Dim localPoint As Point = e.Location
             'Cache this value against the click event destroying the control
             Dim ctrl As ILightweightControl = oldMouseDownControl
-            If ctrl IsNot Nothing Then
-                If localPoint = oldMouseDownPoint Then
-                    ctrl.doClick()
+            Try
+                If ctrl IsNot Nothing Then
+                    If IsSameTap(localPoint, oldMouseDownPoint) Then
+                        Try
+                            ctrl.doClick()
+                            pressedClickSent = True
+                        Catch
+                            ' Launch/close handlers must not skip press-state cleanup below.
+                        End Try
+                    End If
                 End If
-                ctrl.doEvent(ILightweightControl.LightweightEvents.MouseUp)
-            End If
+            Finally
+                If ctrl IsNot Nothing Then
+                    Try
+                        ctrl.doEvent(ILightweightControl.LightweightEvents.MouseUp)
+                    Catch
+                    End Try
+                End If
+                oldMouseDownControl = Nothing
+                If Me.Capture Then Me.Capture = False
+            End Try
         End Sub
+
+        ' If capture is lost (parent hidden during Start Menu close, touch cancel, etc.),
+        ' clear the pressed/white state so buttons do not stay stuck highlighted.
+        Private Sub Me_MouseCaptureChanged(ByVal sender As Object, ByVal e As EventArgs) Handles Me.MouseCaptureChanged
+            If Me.Capture Then Return
+            Dim ctrl As ILightweightControl = oldMouseDownControl
+            If ctrl Is Nothing Then Return
+            Try
+                ctrl.doEvent(ILightweightControl.LightweightEvents.MouseUp)
+            Catch
+            End Try
+            oldMouseDownControl = Nothing
+        End Sub
+
+        Private Function IsSameTap(ByVal a As Point, ByVal b As Point) As Boolean
+            Return Math.Abs(a.X - b.X) <= TouchSlopPx AndAlso Math.Abs(a.Y - b.Y) <= TouchSlopPx
+        End Function
         'Passes MouseOver events to the child controls as MouseMove, MouseEnter, and MouseLeave events
         Private Sub Me_MouseOver(ByVal sender As Object, ByVal e As MouseEventArgs) Handles Me.MouseMove
             Dim newMove As ILightweightControl = ControlFromPoint(e.Location)
@@ -138,10 +176,15 @@ Namespace Controls
         'Passes DoubleClick events to the child controls
         Private Sub Me_DoubleClick(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.DoubleClick
             Dim localPoint As Point = PointToClient(Cursor.Position)
-            Dim ctrl As ILightweightControl = ControlFromPoint(localPoint)
-            If ctrl IsNot Nothing Then
-                ctrl.doEvent(ILightweightControl.LightweightEvents.DoubleClick)
+            Dim ctrl As ILightweightControl = oldMouseDownControl
+            If ctrl Is Nothing Then ctrl = ControlFromPoint(localPoint)
+            If ctrl Is Nothing Then Return
+            If Not pressedClickSent Then
+                ctrl.doClick()
+                pressedClickSent = True
             End If
+            ctrl.doEvent(ILightweightControl.LightweightEvents.MouseUp)
+            ctrl.doEvent(ILightweightControl.LightweightEvents.DoubleClick)
         End Sub
 
         'Updates colors of child controls

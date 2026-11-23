@@ -62,11 +62,11 @@ Public Class frmStartup
 
             'Find out what kind of data was sent:
             ' LCARSmedia Phase 1 strip hook (dwData = LMED magic) — no UI yet.
-            If modMediaSession.TryHandleCopyData(New IntPtr(myData.dwData), myData.cdData, myData.lpData) Then
+            If modMediaSession.TryHandleCopyData(myData.dwData, myData.cdData, myData.lpData) Then
                 m.Result = 1
                 Return
             End If
-            Select Case myData.dwData
+            Select Case myData.dwData.ToInt64()
                 Case 1
                     'They want to set the wallpaper
 
@@ -446,7 +446,13 @@ Public Class frmStartup
         curBusiness.Add(b)
         Dim myForm As Form
         Try
-            Dim screenType As Type = getMainScreenTypes()(modSettings.MainScreen(i) - 1)
+            Dim types As List(Of Type) = getMainScreenTypes()
+            Dim idx As Integer = modSettings.MainScreen(i) - 1
+            If idx < 0 OrElse idx >= types.Count OrElse Not IsMainScreenSelectable(types(idx)) Then
+                idx = 0
+                modSettings.MainScreen(i) = 1
+            End If
+            Dim screenType As Type = types(idx)
             myForm = CType(Activator.CreateInstance(screenType, b), Form)
         Catch ex As Exception
             myForm = New frmMainscreen1(b)

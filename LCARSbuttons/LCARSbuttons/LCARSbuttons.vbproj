@@ -12,6 +12,12 @@
     <OutputType>Library</OutputType>
     <RootNamespace>LCARS</RootNamespace>
     <AssemblyName>LCARS</AssemblyName>
+    <!--
+      Must stay CLR 2 / .NET 3.5. OSK, shutdown, explorer, and other satellites are
+      CLR 2 hosts; a CLR 4 LCARS.dll fails with BadImageFormatException ("runtime newer
+      than the currently loaded runtime"). Do not retarget to v4.0.
+    -->
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <MyType>Windows</MyType>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
@@ -59,6 +65,7 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Design" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Management" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
   </ItemGroup>
@@ -144,6 +151,8 @@
     <Compile Include="Controls\Trackbar.vb">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\LcarsHScrollPanel.vb" />
+    <Compile Include="Controls\LcarsScrollPanel.vb" />
     <Compile Include="Controls\WindowlessContainer.vb">
       <SubType>Component</SubType>
     </Compile>
@@ -164,6 +173,27 @@
     <Compile Include="Lightweight Controls\LCStandardButton.vb" />
     <Compile Include="Lightweight Controls\LCHalfPillButton.vb" />
     <Compile Include="Lightweight Controls\LCFlatButton.vb" />
+    <Compile Include="Diagnostics\AudioEndpointService.vb" />
+    <Compile Include="Diagnostics\AudioVolumeService.vb" />
+    <Compile Include="Diagnostics\CollapsibleSection.vb" />
+    <Compile Include="Diagnostics\DiskLayoutPanel.vb" />
+    <Compile Include="Diagnostics\DisplayPanel.vb" />
+    <Compile Include="Diagnostics\DisplayService.vb" />
+    <Compile Include="Diagnostics\EventLogDetailForm.vb" />
+    <Compile Include="Diagnostics\EventLogPanel.vb" />
+    <Compile Include="Diagnostics\IEngineeringPanelRefresh.vb" />
+    <Compile Include="Diagnostics\IndicatorTrackbar.vb" />
+    <Compile Include="Diagnostics\MemoryCompositionPanel.vb" />
+    <Compile Include="Diagnostics\NetworkAdapterService.vb" />
+    <Compile Include="Diagnostics\NetworkPanel.vb" />
+    <Compile Include="Diagnostics\PowerPanel.vb" />
+    <Compile Include="Diagnostics\PowerService.vb" />
+    <Compile Include="Diagnostics\ProgramsPanel.vb" />
+    <Compile Include="Diagnostics\ResourceMonitorPanel.vb" />
+    <Compile Include="Diagnostics\ShellProcess.vb" />
+    <Compile Include="Diagnostics\SoundPanel.vb" />
+    <Compile Include="Diagnostics\UsersPanel.vb" />
+    <Compile Include="Diagnostics\WifiService.vb" />
     <Compile Include="Modules\Alerts.vb" />
     <Compile Include="Modules\Util.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />

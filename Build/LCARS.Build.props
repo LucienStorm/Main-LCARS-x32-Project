@@ -10,9 +10,11 @@
     <ResgenToolPath Condition="'$(ResgenToolPath)' == ''">$(LcarsSdkToolsPath)</ResgenToolPath>
     <SDK40ToolsPath Condition="'$(SDK40ToolsPath)' == ''">$(LcarsSdkToolsPath)</SDK40ToolsPath>
     <!--
-      Default for most legacy LCARS projects. LCARSmain overrides to v4.0 because
-      modern MSBuild generates SpeechLib/IWsh COM interops as CLR 4 assemblies,
-      which a v3.5 (CLR 2) host cannot load (BadImageFormatException on startup).
+      Default for most legacy LCARS projects (including LCARS.dll / LCARSbuttons).
+      LCARSmain overrides to v4.0 because modern MSBuild generates SpeechLib/IWsh
+      COM interops as CLR 4 assemblies, which a v3.5 host cannot load.
+      LCARS.dll itself must remain v3.5: CLR 2 utilities (OSK, shutdown, etc.)
+      cannot load a CLR 4 LCARS.dll.
     -->
     <TargetFrameworkVersion Condition="'$(TargetFrameworkVersion)' == ''">v3.5</TargetFrameworkVersion>
   </PropertyGroup>

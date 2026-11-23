@@ -9,18 +9,68 @@ Public Module CommonScreen
     Public WithEvents mainTimer As New Timer With {.Interval = 100}
 
     Public Sub initCommonComponents(ByVal b As modBusiness)
-        If b.hasClock Then initClock(b)
-        If b.hasWeather Then modHudWeather.InitDisplay(b)
-        If b.hasPowerMonitor Then initPowerStatus(b)
-        If b.hasTaskbar Then initWindows(b)
+        modDiagnostics.LogStep("CommonScreen.initCommonComponents",
+            "screen=" & b.ScreenIndex &
+            " hasClock=" & b.hasClock.ToString() &
+            " hasWeather=" & b.hasWeather.ToString() &
+            " hasPower=" & b.hasPowerMonitor.ToString() &
+            " hasTaskbar=" & b.hasTaskbar.ToString())
+        If b.hasClock Then
+            Try
+                initClock(b)
+            Catch ex As Exception
+                modDiagnostics.LogException("CommonScreen.initClock", ex, "screen=" & b.ScreenIndex)
+            End Try
+        End If
+        If b.hasWeather Then
+            Try
+                modHudWeather.InitDisplay(b)
+            Catch ex As Exception
+                modDiagnostics.LogException("CommonScreen.initWeather", ex, "screen=" & b.ScreenIndex)
+            End Try
+        End If
+        If b.hasPowerMonitor Then
+            Try
+                initPowerStatus(b)
+            Catch ex As Exception
+                modDiagnostics.LogException("CommonScreen.initPowerStatus", ex, "screen=" & b.ScreenIndex)
+            End Try
+        End If
+        If b.hasTaskbar Then
+            Try
+                initWindows(b)
+            Catch ex As Exception
+                modDiagnostics.LogException("CommonScreen.initWindows", ex, "screen=" & b.ScreenIndex)
+            End Try
+        End If
     End Sub
 
     Private Sub mainTimer_tick(ByVal sender As Object, ByVal e As EventArgs) Handles mainTimer.Tick
-        updateClock()
-        modHudWeather.TickWeather()
-        updatePowerStatus()
-        updateWindows()
-        UpdateTray()
+        Try
+            updateClock()
+        Catch ex As Exception
+            modDiagnostics.LogException("CommonScreen.updateClock", ex)
+        End Try
+        Try
+            modHudWeather.TickWeather()
+        Catch ex As Exception
+            modDiagnostics.LogException("CommonScreen.TickWeather", ex)
+        End Try
+        Try
+            updatePowerStatus()
+        Catch ex As Exception
+            modDiagnostics.LogException("CommonScreen.updatePowerStatus", ex)
+        End Try
+        Try
+            updateWindows()
+        Catch ex As Exception
+            modDiagnostics.LogException("CommonScreen.updateWindows", ex)
+        End Try
+        Try
+            UpdateTray()
+        Catch ex As Exception
+            modDiagnostics.LogException("CommonScreen.UpdateTray", ex)
+        End Try
     End Sub
 
 #Region " Clock "
@@ -47,9 +97,17 @@ Public Module CommonScreen
     End Sub
 
     Private Sub ApplyClockText(ByVal b As modBusiness, ByVal text As String)
+        If b.myClock Is Nothing OrElse b.myClock.IsDisposed Then Return
         b.myClock.Text = text
         Dim barClock As LCARS.Controls.FlatButton = TryCast(b.myClock, LCARS.Controls.FlatButton)
         If barClock IsNot Nothing Then barClock.ButtonText = text
+        ' View 2's collapsed clock is a different control and keeps the designer "12:00 PM" until written.
+        If b.myForm Is Nothing OrElse b.myForm.IsDisposed Then Return
+        Dim collapsed() As Control = b.myForm.Controls.Find("sbTL", True)
+        For Each extra As Control In collapsed
+            If extra Is Nothing OrElse extra.IsDisposed OrElse Object.ReferenceEquals(extra, b.myClock) Then Continue For
+            extra.Text = text
+        Next
     End Sub
 
     Private Sub updateClock()
@@ -224,7 +282,8 @@ Public Module CommonScreen
     End Enum
 
     Private Sub initWindows(ByVal b As modBusiness)
-        Dim bScreen As Integer = MonitorFromWindow(b.myForm.Handle.ToInt32(), MONITOR_DEFAULTTONEAREST)
+        If b Is Nothing OrElse b.myForm Is Nothing OrElse b.myForm.IsDisposed OrElse Not b.myForm.IsHandleCreated Then Return
+        Dim bScreen As Integer = MonitorFromWindow(b.myForm.Handle, MONITOR_DEFAULTTONEAREST)
         For Each app As ExternalApp In windowList.Values
             If app.hScreen = bScreen Then
                 b.AddWindow(app)
@@ -241,8 +300,8 @@ Public Module CommonScreen
         'See which screens are available
         Dim screenDict As New Dictionary(Of Integer, modBusiness)
         For Each b As modBusiness In curBusiness
-            If b.isInit And b.hasTaskbar Then
-                screenDict.Add(MonitorFromWindow(b.myForm.Handle.ToInt32(), MONITOR_DEFAULTTONEAREST), b)
+            If b.isInit AndAlso b.hasTaskbar AndAlso b.myForm IsNot Nothing AndAlso Not b.myForm.IsDisposed AndAlso b.myForm.IsHandleCreated Then
+                screenDict(MonitorFromWindow(b.myForm.Handle, MONITOR_DEFAULTTONEAREST)) = b
             End If
         Next
 

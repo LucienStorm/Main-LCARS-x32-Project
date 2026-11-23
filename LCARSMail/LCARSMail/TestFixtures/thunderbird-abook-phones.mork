@@ -1,0 +1,4 @@
+// <! <(meta 1)> // (f=iso-8859-1)
+// WorkPhone + HomePhone column map (slice 13)
+(k=^50^PrimaryEmail^51^DisplayName^52^WorkPhone^53^HomePhone)
+@7=^50^phones@example.com^51^Phone User^52^555-0100^53^555-0199

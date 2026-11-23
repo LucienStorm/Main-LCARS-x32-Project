@@ -149,6 +149,80 @@ Public Class frmShutdown
     End Sub
 
 
+    Private Sub sbRestartLcars_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbRestartLcars.Click
+        closingLCARS = True
+        Me.Hide()
+        MarkShellRestartPending()
+        Dim previousIds As New System.Collections.Generic.List(Of Integer)
+        For Each running As Process In Process.GetProcessesByName("LCARSmain")
+            previousIds.Add(running.Id)
+        Next
+        CloseLCARS()
+        Dim waitedMs As Integer = 0
+        While ListedProcessesStillRunning(previousIds) AndAlso waitedMs < 8000
+            Application.DoEvents()
+            Threading.Thread.Sleep(100)
+            waitedMs += 100
+        End While
+        For Each running As Process In Process.GetProcessesByName("LCARSmain")
+            If previousIds.Contains(running.Id) Then
+                Try
+                    running.Kill()
+                Catch
+                End Try
+            End If
+        Next
+        waitedMs = 0
+        While ListedProcessesStillRunning(previousIds) AndAlso waitedMs < 4000
+            Threading.Thread.Sleep(100)
+            waitedMs += 100
+        End While
+        ' Winlogon relaunches a registered shell on its own. Otherwise start it here.
+        Threading.Thread.Sleep(750)
+        If Process.GetProcessesByName("LCARSmain").Length = 0 Then
+            Try
+                Dim mainExe As String = System.IO.Path.Combine(Application.StartupPath, "LCARSmain.exe")
+                Dim startInfo As New ProcessStartInfo(mainExe)
+                startInfo.WorkingDirectory = Application.StartupPath
+                startInfo.UseShellExecute = True
+                Process.Start(startInfo)
+            Catch
+                If Not IsLcarsRegisteredShell() AndAlso Process.GetProcessesByName("explorer").Length = 0 Then
+                    Process.Start("explorer.exe")
+                End If
+            End Try
+        End If
+        End
+    End Sub
+
+    Private Shared Function ListedProcessesStillRunning(ByVal ids As System.Collections.Generic.List(Of Integer)) As Boolean
+        For Each running As Process In Process.GetProcessesByName("LCARSmain")
+            If ids.Contains(running.Id) Then Return True
+        Next
+        Return False
+    End Function
+
+    Private Shared Sub MarkShellRestartPending()
+        Try
+            Dim dir As String = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "LCARS x32")
+            If Not System.IO.Directory.Exists(dir) Then System.IO.Directory.CreateDirectory(dir)
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "pending-shell-restart.flag"), DateTime.UtcNow.ToString("o"))
+        Catch
+        End Try
+    End Sub
+
+    Private Shared Function IsLcarsRegisteredShell() As Boolean
+        Try
+            Dim shellKey As Microsoft.Win32.RegistryKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey("SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon")
+            If shellKey Is Nothing Then Return False
+            Dim shellCommand As String = CStr(shellKey.GetValue("Shell", "explorer.exe"))
+            shellKey.Close()
+            Return shellCommand.ToLower().Contains("lcarsmain")
+        Catch
+            Return False
+        End Try
+    End Function
+
     Private Sub sbLock_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles sbLock.Click
         Try
             Process.Start(Application.StartupPath & "\LCARSLock.exe")

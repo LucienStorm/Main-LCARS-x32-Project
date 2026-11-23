@@ -1332,10 +1332,10 @@ Public Class Installing
                             WriteInstallLog("Soft-fail copy: " & myComponent.name & " — " & lastInstallError)
                         Else
                             fileCopyFailed = True
-                            failed = True
-                            RaiseEvent DisplayMessage("Copying failed: " & myComponent.name)
-                            lastInstallError = "Could not copy " & myComponent.name & " to " & targetFile & _
-                                If(String.IsNullOrEmpty(lastInstallError), "", vbNewLine & lastInstallError)
+                        failed = True
+                        RaiseEvent DisplayMessage("Copying failed: " & myComponent.name)
+                        lastInstallError = "Could not copy " & myComponent.name & " to " & targetFile & _
+                            If(String.IsNullOrEmpty(lastInstallError), "", vbNewLine & lastInstallError)
                         End If
                     Else
                         localVersions.UpdateVersion(myComponent.name, myComponent.version)
@@ -1354,9 +1354,9 @@ Public Class Installing
                         RaiseEvent DisplayMessage("Warning: " & myComponent.name & " — " & ex.Message)
                         WriteInstallLog("Soft-fail exception: " & myComponent.name & " — " & ex.ToString())
                     Else
-                        failed = True
-                        lastInstallError = ex.ToString()
-                        RaiseEvent DisplayMessage("Copying failed: " & myComponent.name)
+                    failed = True
+                    lastInstallError = ex.ToString()
+                    RaiseEvent DisplayMessage("Copying failed: " & myComponent.name)
                     End If
                 End Try
                 componentsInstalled += 1

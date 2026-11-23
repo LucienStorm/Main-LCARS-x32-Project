@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\LCARS.Build.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProductVersion>9.0.21022</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{A8F3C2E1-5D4B-4A67-8E9F-1D2C3B4A5E6F}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <StartupObject>LCARSMail.Program</StartupObject>
+    <RootNamespace>LCARSMail</RootNamespace>
+    <AssemblyName>LCARScomms</AssemblyName>
+    <MyType>WindowsFormsWithCustomSubMain</MyType>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFrameworkProfile />
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Debug\</OutputPath>
+    <PlatformTarget>x86</PlatformTarget>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <DebugType>pdbonly</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <PlatformTarget>x86</PlatformTarget>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Debug\</OutputPath>
+    <PlatformTarget>x86</PlatformTarget>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <PlatformTarget>x86</PlatformTarget>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="BouncyCastle.Cryptography">
+      <HintPath>packages\BouncyCastle.Cryptography.2.4.0\lib\netstandard2.0\BouncyCastle.Cryptography.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="MailKit">
+      <HintPath>packages\MailKit.4.8.0\lib\net48\MailKit.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="MimeKit">
+      <HintPath>packages\MimeKit.4.8.0\lib\net48\MimeKit.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Web.WebView2.Core">
+      <HintPath>..\..\Lcars Web Browser\packages\Microsoft.Web.WebView2.1.0.4129.50\lib\net462\Microsoft.Web.WebView2.Core.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Web.WebView2.WinForms">
+      <HintPath>..\..\Lcars Web Browser\packages\Microsoft.Web.WebView2.1.0.4129.50\lib\net462\Microsoft.Web.WebView2.WinForms.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Buffers">
+      <HintPath>packages\System.Buffers.4.5.1\lib\netstandard2.0\System.Buffers.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Data.SQLite">
+      <HintPath>packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118.0\lib\net46\System.Data.SQLite.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Formats.Asn1">
+      <HintPath>packages\System.Formats.Asn1.8.0.1\lib\netstandard2.0\System.Formats.Asn1.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>packages\System.Memory.4.5.5\lib\netstandard2.0\System.Memory.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>packages\System.Numerics.Vectors.4.5.0\lib\netstandard2.0\System.Numerics.Vectors.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>packages\System.Runtime.CompilerServices.Unsafe.6.0.0\lib\netstandard2.0\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Security" />
+    <Reference Include="System.Threading.Tasks.Extensions">
+      <HintPath>packages\System.Threading.Tasks.Extensions.4.5.4\lib\netstandard2.0\System.Threading.Tasks.Extensions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.ValueTuple">
+      <HintPath>packages\System.ValueTuple.4.5.0\lib\net47\System.ValueTuple.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Import Include="Microsoft.VisualBasic" />
+    <Import Include="System" />
+    <Import Include="System.Collections" />
+    <Import Include="System.Collections.Generic" />
+    <Import Include="System.Drawing" />
+    <Import Include="System.Diagnostics" />
+    <Import Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Mail\AccountStore.vb" />
+    <Compile Include="Mail\AddressBookStore.vb" />
+    <Compile Include="Mail\ImapMailService.vb" />
+    <Compile Include="Mail\SmtpMailService.vb" />
+    <Compile Include="Mail\MailCache.vb" />
+    <Compile Include="Mail\MailModels.vb" />
+    <Compile Include="Mail\ThunderbirdPrefsParser.vb" />
+    <Compile Include="Mail\MailFilterModels.vb" />
+    <Compile Include="Mail\ThunderbirdMsgFilterParser.vb" />
+    <Compile Include="Mail\MailFilterStore.vb" />
+    <Compile Include="Mail\MailFilterEngine.vb" />
+    <Compile Include="Mail\DraftStore.vb" />
+    <Compile Include="Mail\MailConversationGrouper.vb" />
+    <Compile Include="Mail\TlsPolicyStore.vb" />
+    <Compile Include="Mail\CardDavSyncService.vb" />
+    <Compile Include="Mail\CalDavSyncService.vb" />
+    <Compile Include="Mail\LcarsCalendarBridge.vb" />
+    <Compile Include="Mail\MailSearchIndex.vb" />
+    <Compile Include="Mail\MailSearchGlodaFts.vb" />
+    <Compile Include="Mail\CardDavLiveBookCache.vb" />
+    <Compile Include="Mail\EwsGalSyncStore.vb" />
+    <Compile Include="Mail\EwsGalWriteProofStore.vb" />
+    <Compile Include="Mail\MailSearchIndexCursor.vb" />
+    <Compile Include="Mail\MatrixAccountStore.vb" />
+    <Compile Include="Mail\NntpNewsService.vb" />
+    <Compile Include="Mail\NntpSubscriptionStore.vb" />
+    <Compile Include="Mail\EwsMailService.vb" />
+    <Compile Include="Mail\EwsMailBridge.vb" />
+    <Compile Include="Mail\EwsBackgroundSync.vb" />
+    <Compile Include="Mail\EwsItemIdStore.vb" />
+    <Compile Include="Mail\EwsAttachmentStore.vb" />
+    <Compile Include="Mail\MailFilterEngineEws.vb" />
+    <Compile Include="Mail\UnifiedMailService.vb" />
+    <Compile Include="Mail\MailSearchBackgroundIndexer.vb" />
+    <Compile Include="Mail\EwsLcarsBridge.vb" />
+    <Compile Include="Mail\EwsCalendarConflictHelper.vb" />
+    <Compile Include="Mail\MailGlodaSavedSearchStore.vb" />
+    <Compile Include="Mail\MailCalendarInvitationBridge.vb" />
+    <Compile Include="Mail\MailCalendarMeetingReplyBridge.vb" />
+    <Compile Include="Mail\EwsCalendarDeleteQueue.vb" />
+    <Compile Include="Mail\EwsCalendarRsvpQueue.vb" />
+    <Compile Include="Mail\RssFeedService.vb" />
+    <Compile Include="Mail\RssSubscriptionStore.vb" />
+    <Compile Include="Mail\MatrixChatService.vb" />
+    <Compile Include="Mail\XmppChatService.vb" />
+    <Compile Include="Mail\XmppAccountStore.vb" />
+    <Compile Include="Mail\EwsOAuthStore.vb" />
+    <Compile Include="Mail\EwsOAuthDeviceFlow.vb" />
+    <Compile Include="Mail\EwsOAuthClientStore.vb" />
+    <Compile Include="Mail\LcarsCommsUi.vb" />
+    <Compile Include="Mail\MailOAuthProviders.vb" />
+    <Compile Include="Mail\MailOAuthStore.vb" />
+    <Compile Include="Mail\MailOAuthBrowserFlow.vb" />
+    <Compile Include="Mail\FolderFavoriteStore.vb" />
+    <Compile Include="frmPasswordPrompt.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Mail\MailAddressHelper.vb" />
+    <Compile Include="Mail\MailHtmlInlineRelatedBuilder.vb" />
+    <Compile Include="Mail\MailAutocryptService.vb" />
+    <Compile Include="Mail\ThunderbirdCardDavImporter.vb" />
+    <Compile Include="Mail\MailFilterThunderbirdExporter.vb" />
+    <Compile Include="Mail\MailGlobalSearch.vb" />
+    <Compile Include="frmFilterEdit.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmFilterPartEdit.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmDraftPicker.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmFolderSelect.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmGlodaSavedSearchPicker.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmCardDavSync.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmNews.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmCalDavSync.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmEwsSync.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmContactEdit.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmAddressBook.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmRssFeeds.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmChat.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmOfflineSettings.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Mail\MailOfflinePolicy.vb" />
+    <Compile Include="Controls\MailHtmlReadPane.vb">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\MailHtmlComposePane.vb">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Mail\MorkAbookParser.vb" />
+    <Compile Include="Mail\MorkProfileAcceptanceStore.vb" />
+    <Compile Include="Mail\MailPgpService.vb" />
+    <Compile Include="Mail\LcarsOpenPgpContext.vb" />
+    <Compile Include="Program.vb" />
+    <Compile Include="frmMail.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmCompose.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmFilters.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmPgpKeys.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="My Project\AssemblyInfo.vb" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118.0\build\net46\x86\SQLite.Interop.dll">
+      <Link>x86\SQLite.Interop.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118.0\build\net46\x64\SQLite.Interop.dll">
+      <Link>x64\SQLite.Interop.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="TestFixtures\thunderbird-abook-sample.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-golden.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-profile.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-mixed.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-phones.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-rowref.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-company.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-nick.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-jobtitle.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-department.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-webpage.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-fax.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-pager.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-custom1.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-custom2.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-custom3.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-custom4.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-spouse.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFixtures\thunderbird-abook-multitable.mork">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\Testdata\sample-prefs.js">
+      <Link>Testdata\sample-prefs.js</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\Testdata\sample-msgFilterRules.dat">
+      <Link>Testdata\sample-msgFilterRules.dat</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\LCARSbuttons\LCARSbuttons\LCARSbuttons.vbproj">
+      <Project>{D3ED0098-5647-4C53-B87C-DFBD8BDE7FE5}</Project>
+      <Name>LCARSbuttons</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+  <PropertyGroup>
+    <_Wv2SdkDir>$(ProjectDir)..\..\Lcars Web Browser\packages\Microsoft.Web.WebView2.1.0.4129.50\</_Wv2SdkDir>
+    <_Wv2LoaderSrc>$(_Wv2SdkDir)runtimes\win-x86\native\WebView2Loader.dll</_Wv2LoaderSrc>
+  </PropertyGroup>
+  <Target Name="CopyWebView2Loader" AfterTargets="Build" Condition="Exists('$(_Wv2LoaderSrc)')">
+    <Copy SourceFiles="$(_Wv2LoaderSrc)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+  <Import Project="$(MSBuildBinPath)\Microsoft.VisualBasic.targets" />
+</Project>

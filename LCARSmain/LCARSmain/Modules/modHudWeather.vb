@@ -67,6 +67,16 @@ Friend Module modHudWeather
         SyncWeatherLayout(b)
     End Sub
 
+    ''' <summary>
+    ''' Drops weather bindings for a screen so the next mainscreen can attach its own clock.
+    ''' </summary>
+    Public Sub DetachScreen(ByVal screenIndex As Integer)
+        attachedScreens.Remove(screenIndex)
+        clockHandlersAttached.Remove(screenIndex)
+        lastWeatherTickLayoutKey.Remove(screenIndex)
+        view1WeatherLayoutInProgress.Remove(screenIndex)
+    End Sub
+
     Public Sub AttachWeatherHud(ByVal b As modBusiness)
         If Not b.hasClock OrElse b.myClock Is Nothing Then Return
         If attachedScreens.Contains(b.ScreenIndex) AndAlso b.myWeather IsNot Nothing AndAlso Not b.myWeather.IsDisposed Then
@@ -217,6 +227,16 @@ Friend Module modHudWeather
                 AddHandler secondaryBar.LocationChanged, Sub(sender As Object, e As EventArgs) SyncWeatherLayout(b)
                 AddHandler secondaryBar.SizeChanged, Sub(sender As Object, e As EventArgs) SyncWeatherLayout(b)
             End If
+            Dim view2LeftMatches() As Control = b.myForm.Controls.Find("fbMain1", True)
+            If view2LeftMatches.Length > 0 Then
+                Dim leftBar As Control = view2LeftMatches(0)
+                AddHandler leftBar.LocationChanged, Sub(sender As Object, e As EventArgs) SyncWeatherLayout(b)
+                AddHandler leftBar.SizeChanged, Sub(sender As Object, e As EventArgs) SyncWeatherLayout(b)
+                Dim leftFlat As LCARS.Controls.FlatButton = TryCast(leftBar, LCARS.Controls.FlatButton)
+                If leftFlat IsNot Nothing Then
+                    AddHandler leftFlat.ColorsAvailable.ColorsUpdated, Sub(sender As Object, e As EventArgs) SyncWeatherLayout(b)
+                End If
+            End If
         End If
     End Sub
 
@@ -298,7 +318,9 @@ Friend Module modHudWeather
     End Function
 
     Private Sub SyncWeatherLayout(ByVal b As modBusiness)
+        If b Is Nothing OrElse b.myForm Is Nothing OrElse b.myForm.IsDisposed Then Return
         If b.myClock Is Nothing OrElse b.myClock.IsDisposed Then Return
+        If view1WeatherLayoutInProgress.Contains(b.ScreenIndex) Then Return
 
         If String.Equals(b.myForm.Name, "frmMainscreen1", StringComparison.OrdinalIgnoreCase) Then
             SyncView1WeatherLayout(b)
@@ -307,9 +329,16 @@ Friend Module modHudWeather
 
         If b.myWeather Is Nothing OrElse b.myWeather.IsDisposed Then Return
 
-        Using diag As DiagnosticScope = modDiagnostics.BeginScope("modHudWeather.SyncWeatherLayout", "screen=" & b.ScreenIndex)
-            SyncGenericWeatherLayout(b)
-        End Using
+        view1WeatherLayoutInProgress.Add(b.ScreenIndex)
+        Try
+            Using diag As DiagnosticScope = modDiagnostics.BeginScope("modHudWeather.SyncWeatherLayout", "screen=" & b.ScreenIndex)
+                SyncGenericWeatherLayout(b)
+            End Using
+        Catch ex As Exception
+            modDiagnostics.LogException("modHudWeather.SyncWeatherLayout", ex, "screen=" & b.ScreenIndex)
+        Finally
+            view1WeatherLayoutInProgress.Remove(b.ScreenIndex)
+        End Try
     End Sub
 
     Private Sub SyncView1WeatherLayout(ByVal b As modBusiness)
@@ -491,40 +520,198 @@ Friend Module modHudWeather
     Private Sub SyncGenericWeatherLayout(ByVal b As modBusiness)
         Dim clock As Control = b.myClock
         Dim weather As Control = b.myWeather
+        If clock Is Nothing OrElse weather Is Nothing OrElse clock.IsDisposed OrElse weather.IsDisposed Then Return
 
-        If weather.Parent IsNot clock.Parent Then
-            If weather.Parent IsNot Nothing Then
-                weather.Parent.Controls.Remove(weather)
+        If String.Equals(b.myForm.Name, "frmMainscreen2", StringComparison.OrdinalIgnoreCase) Then
+            SyncView2WeatherLayout(b, clock, weather)
+            Return
+        End If
+
+        If String.Equals(b.myForm.Name, "frmMainscreen3", StringComparison.OrdinalIgnoreCase) Then
+            SyncView3WeatherLayout(b, clock, weather)
+            Return
+        End If
+
+        If String.Equals(b.myForm.Name, "frmMainscreen4", StringComparison.OrdinalIgnoreCase) Then
+            SyncView4WeatherLayout(b, clock, weather)
+            Return
+        End If
+
+        If String.Equals(b.myForm.Name, "frmMainscreen5", StringComparison.OrdinalIgnoreCase) Then
+            Dim barMatches() As Control = b.myForm.Controls.Find("pnlMainBar", True)
+            If barMatches.Length > 0 AndAlso barMatches(0) IsNot Nothing Then
+                Dim bar As Control = barMatches(0)
+                EnsureControlOnParent(weather, bar)
+                Dim weatherLbl As Label = TryCast(weather, Label)
+                weather.Font = WeatherFont
+                weather.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+                Dim wWidth As Integer = Math.Max(110, Math.Min(210, TextRenderer.MeasureText(If(weather.Text, "WX"), weather.Font).Width + 16))
+                weather.Size = New Drawing.Size(wWidth, 26)
+                weather.Location = New Drawing.Point(Math.Max(620, clock.Left - wWidth - 8), clock.Top + 3)
+                weather.BackColor = Color.FromArgb(255, 22, 2, 2)
+                weather.ForeColor = Color.FromArgb(255, 255, 175, 0)
+                If weatherLbl IsNot Nothing Then
+                    weatherLbl.BackColor = weather.BackColor
+                    weatherLbl.ForeColor = weather.ForeColor
+                    weatherLbl.TextAlign = ContentAlignment.MiddleRight
+                End If
+                weather.Visible = True
+                weather.BringToFront()
+                Return
             End If
-            clock.Parent.Controls.Add(weather)
+        End If
+
+        ' Fallback: keep weather inside the clock, matching the clock's LCARS fill.
+        If clock.Width < 140 OrElse clock.Height < 18 Then
+            weather.Visible = False
+            Return
+        End If
+
+        If weather.Parent IsNot clock Then
+            If weather.Parent IsNot Nothing Then weather.Parent.Controls.Remove(weather)
+            clock.Controls.Add(weather)
+        End If
+
+        Dim fillColor As Color = GetLcarsControlFillColor(clock, ColorTranslator.FromHtml("#FFCC66"))
+        Dim weatherLabel As Label = TryCast(weather, Label)
+        weather.Visible = True
+        weather.Anchor = AnchorStyles.None
+        weather.Height = Math.Min(WeatherHeight, Math.Max(12, clock.Height - 4))
+        Dim width As Integer = Math.Min(160, Math.Max(48, (clock.Width \ 2) - 8))
+        weather.Location = New Drawing.Point(4, Math.Max(0, (clock.Height - weather.Height) \ 2))
+        weather.Size = New Drawing.Size(width, weather.Height)
+        weather.BackColor = fillColor
+        weather.ForeColor = Color.Black
+        If weatherLabel IsNot Nothing Then
+            weatherLabel.BackColor = fillColor
+            weatherLabel.ForeColor = Color.Black
+            weatherLabel.TextAlign = ContentAlignment.MiddleLeft
+        End If
+        weather.BringToFront()
+    End Sub
+
+    ''' <summary>
+    ''' Mode 3: weather uses the empty top-bar strip (FlatButton4) left of the clock so the
+    ''' full city + conditions fit, with the same LCARS fill as that strip (no mismatched box).
+    ''' </summary>
+    Private Sub SyncView3WeatherLayout(ByVal b As modBusiness, ByVal clock As Control, ByVal weather As Control)
+        Dim matches() As Control = b.myForm.Controls.Find("FlatButton4", True)
+        If matches.Length = 0 OrElse matches(0) Is Nothing OrElse matches(0).IsDisposed Then
+            weather.Visible = False
+            Return
+        End If
+
+        Dim topStrip As Control = matches(0)
+        If Not topStrip.Visible OrElse topStrip.Width < 40 Then
+            weather.Visible = False
+            Return
+        End If
+
+        EnsureControlOnParent(weather, topStrip)
+
+        Dim barColor As Color = GetLcarsControlFillColor(topStrip, ColorTranslator.FromHtml("#FF9900"))
+        Dim weatherLabel As Label = TryCast(weather, Label)
+        weather.Font = WeatherFont
+        weather.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Bottom
+        weather.Location = New Drawing.Point(2, 0)
+        weather.Size = New Drawing.Size(Math.Max(40, topStrip.Width - 4), Math.Max(WeatherHeight, topStrip.Height))
+        weather.BackColor = barColor
+        weather.ForeColor = Color.Black
+        If weatherLabel IsNot Nothing Then
+            weatherLabel.BackColor = barColor
+            weatherLabel.ForeColor = Color.Black
+            weatherLabel.TextAlign = ContentAlignment.MiddleCenter
+        End If
+        weather.Visible = True
+        weather.BringToFront()
+    End Sub
+
+    ''' <summary>
+    ''' Mode 4: keep weather inside the clock (size is fine) but match the clock's LCARS fill
+    ''' so it does not look like a separate StaticTan box.
+    ''' </summary>
+    Private Sub SyncView4WeatherLayout(ByVal b As modBusiness, ByVal clock As Control, ByVal weather As Control)
+        If clock.Width < 60 OrElse clock.Height < 16 Then
+            weather.Visible = False
+            Return
+        End If
+
+        EnsureControlOnParent(weather, clock)
+
+        Dim fillColor As Color = GetLcarsControlFillColor(clock, ColorTranslator.FromHtml("#FF9900"))
+        Dim weatherLabel As Label = TryCast(weather, Label)
+        weather.Font = WeatherFont
+        weather.Visible = True
+        weather.Anchor = AnchorStyles.None
+        weather.Height = Math.Min(WeatherHeight, Math.Max(12, clock.Height - 4))
+        Dim width As Integer = Math.Min(Math.Max(48, clock.Width - 8), Math.Max(48, (clock.Width * 2) \ 3))
+        weather.Location = New Drawing.Point(4, Math.Max(0, (clock.Height - weather.Height) \ 2))
+        weather.Size = New Drawing.Size(width, weather.Height)
+        weather.BackColor = fillColor
+        weather.ForeColor = Color.Black
+        If weatherLabel IsNot Nothing Then
+            weatherLabel.BackColor = fillColor
+            weatherLabel.ForeColor = Color.Black
+            weatherLabel.TextAlign = ContentAlignment.MiddleLeft
+        End If
+        weather.BringToFront()
+    End Sub
+
+    ''' <summary>
+    ''' Reads the painted LCARS fill for a button so weather can blend into that bar.
+    ''' WinForms Transparent over custom-painted LCARS chrome shows black, so we match the fill instead.
+    ''' </summary>
+    Private Function GetLcarsControlFillColor(ByVal ctrl As Control, ByVal fallback As Color) As Color
+        Dim btn As LCARS.LCARSbuttonClass = TryCast(ctrl, LCARS.LCARSbuttonClass)
+        If btn Is Nothing Then Return fallback
+        Try
+            Return btn.ColorsAvailable.getColor(btn.Color)
+        Catch
+            Return fallback
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' Places Mode 2 weather across the entire width of the empty bar section (fbMain1) to the left of the clock,
+    ''' justified top-center with matching background color so no separate box is drawn.
+    ''' </summary>
+    Private Sub SyncView2WeatherLayout(ByVal b As modBusiness, ByVal clock As Control, ByVal weather As Control)
+        Dim matches() As Control = b.myForm.Controls.Find("fbMain1", True)
+        If matches.Length = 0 OrElse matches(0) Is Nothing OrElse matches(0).IsDisposed Then
+            weather.Visible = False
+            Return
+        End If
+
+        Dim leftBar As Control = matches(0)
+        If Not leftBar.Visible OrElse leftBar.Width < 40 OrElse String.Equals(clock.Name, "sbTL", StringComparison.OrdinalIgnoreCase) Then
+            weather.Visible = False
+            Return
+        End If
+
+        EnsureControlOnParent(weather, leftBar)
+
+        Dim barColor As Color = ColorTranslator.FromHtml("#9999FF")
+        Dim fbLeft As LCARS.Controls.FlatButton = TryCast(leftBar, LCARS.Controls.FlatButton)
+        If fbLeft IsNot Nothing Then
+            Try
+                barColor = fbLeft.ColorsAvailable.getColor(fbLeft.Color)
+            Catch
+            End Try
         End If
 
         Dim weatherLabel As Label = TryCast(weather, Label)
         weather.Font = WeatherFont
-        weather.ForeColor = clock.ForeColor
-        weather.Height = WeatherHeight
+        weather.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        weather.Location = New Drawing.Point(0, 2)
+        weather.Size = New Drawing.Size(leftBar.Width, Math.Min(leftBar.Height - 2, Math.Max(WeatherHeight, 26)))
+        weather.BackColor = barColor
+        weather.ForeColor = Color.Black
         If weatherLabel IsNot Nothing Then
-            weatherLabel.BackColor = Color.Transparent
-            weatherLabel.TextAlign = ContentAlignment.BottomRight
+            weatherLabel.BackColor = barColor
+            weatherLabel.ForeColor = Color.Black
+            weatherLabel.TextAlign = ContentAlignment.TopCenter
         End If
-        weather.Anchor = AnchorStyles.None
-
-        Dim clockTextBottom As Integer = GetClockTextBottom(clock)
-        Dim weatherTextHeight As Integer = TextRenderer.MeasureText("Ag", weather.Font).Height
-        Dim top As Integer = clockTextBottom - weatherTextHeight
-        If top < 0 Then top = 0
-
-        Dim textWidth As Integer = TextRenderer.MeasureText(weather.Text, weather.Font).Width + 8
-        Dim width As Integer = Math.Max(80, Math.Min(textWidth, 420))
-        Dim maxRight As Integer = clock.Left - 6
-        width = Math.Min(width, Math.Max(80, maxRight))
-        Dim left As Integer = Math.Max(0, maxRight - width)
-
-        If weather.Location.X <> left OrElse weather.Location.Y <> top OrElse weather.Width <> width OrElse weather.Height <> WeatherHeight Then
-            weather.Location = New Drawing.Point(left, top)
-            weather.Size = New Drawing.Size(width, WeatherHeight)
-        End If
-
+        weather.Visible = True
         weather.BringToFront()
     End Sub
 

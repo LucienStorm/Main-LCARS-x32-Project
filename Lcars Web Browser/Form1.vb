@@ -568,7 +568,7 @@ Public Class form1
                 dlg.Title = "Save Rich Text File"
                 dlg.Filter = "Rich text files|*.rtf|All files|*.*"
                 dlg.DefaultExt = "rtf"
-            End If
+        End If
 
             Dim currentPath As String = tab.GetPathOrUrl()
             If Not String.IsNullOrEmpty(currentPath) Then
@@ -591,7 +591,7 @@ Public Class form1
                 End If
                 MessageBox.Show("Unable to export annotated image:" & vbCrLf & dlg.FileName, "LCARS Web Browser", MessageBoxButtons.OK, MessageBoxIcon.Error)
                 Return False
-            End If
+        End If
 
             If tab.Save(dlg.FileName) Then
                 SyncActiveTabUi()
@@ -724,14 +724,14 @@ Public Class form1
                     urlValue = line.Substring("URL=".Length).Trim()
                 ElseIf line.StartsWith("BASEURL=", StringComparison.OrdinalIgnoreCase) Then
                     baseUrlValue = line.Substring("BASEURL=".Length).Trim()
-                End If
-            Next
-        Catch
-        End Try
+                            End If
+                Next
+            Catch
+            End Try
         If Not String.IsNullOrEmpty(urlValue) Then Return urlValue
         If Not String.IsNullOrEmpty(baseUrlValue) Then Return baseUrlValue
         Return ""
-    End Function
+        End Function
 
     Private Function IsValidUrlShortcutTarget(ByVal value As String) As Boolean
         Dim text As String = If(value, "").Trim()
@@ -1017,13 +1017,13 @@ Public Class form1
                 FlatButton11.Size = New Drawing.Size(LeftBorder, Math.Max(24, clientH - EdgePad - (TopBarY + elbowH + RailGap)))
                 FlatButton11.ButtonText = ""
                 FlatButton11.Text = ""
-            End If
+        End If
 
             PlaceShellAlignedCloseButton(FlatButton3, EdgePad)
             If FlatButton3 IsNot Nothing Then
                 FlatButton3.Width = ButtonW
                 FlatButton3.Left = Math.Max(0, ClientSize.Width - EdgePad - ButtonW)
-            End If
+        End If
 
             Dim popY As Integer = TopBarY + elbowH + RailGap + (railStep * 1)
             Dim workspaceX As Integer = appRailX - ButtonW - ContentGap
@@ -1773,20 +1773,20 @@ Public Class form1
 
     Private Sub FlatButton14_Click(ByVal sender As Object, ByVal e As EventArgs) Handles FlatButton14.Click
         SetZoom(1.2R)
-        FlatButton15.Visible = True
-        FlatButton14.Visible = False
+            FlatButton15.Visible = True
+            FlatButton14.Visible = False
     End Sub
 
     Private Sub FlatButton15_Click(ByVal sender As Object, ByVal e As EventArgs) Handles FlatButton15.Click
         SetZoom(1.5R)
-        FlatButton16.Visible = True
-        FlatButton15.Visible = False
+            FlatButton16.Visible = True
+            FlatButton15.Visible = False
     End Sub
 
     Private Sub FlatButton16_Click(ByVal sender As Object, ByVal e As EventArgs) Handles FlatButton16.Click
         SetZoom(1.0R)
-        FlatButton14.Visible = True
-        FlatButton16.Visible = False
+            FlatButton14.Visible = True
+            FlatButton16.Visible = False
     End Sub
 
     Private Sub PictureBox1_Click(ByVal sender As Object, ByVal e As EventArgs) Handles PictureBox1.Click

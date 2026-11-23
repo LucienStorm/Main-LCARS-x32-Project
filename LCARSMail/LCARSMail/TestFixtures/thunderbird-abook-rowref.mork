@@ -1,0 +1,4 @@
+// <! <(meta 1)> // (f=iso-8859-1)
+// Row-ref property rows like TB golden @11 (slice 13)
+(k=^90^PrimaryEmail^91^DisplayName)
+@12=<12>(d=PrimaryEmail)>rowref@example.com<12>(d=DisplayName)>Row Ref User<12>(d=Notes)>Call before noon

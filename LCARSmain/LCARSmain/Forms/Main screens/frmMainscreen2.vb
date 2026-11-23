@@ -70,6 +70,7 @@ Public Class frmMainscreen2
             pnlApps.Width = pnlTray.Left - pnlApps.Left
         End If
         modHudWeather.RebindClockLayout(myBusiness)
+        RefreshClockBinding(myBusiness)
         modQuickControls.ScheduleSyncQuickButton(myBusiness)
     End Sub
 

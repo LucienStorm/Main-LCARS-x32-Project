@@ -1,0 +1,6 @@
+// <! <(meta 1)> // (f=iso-8859-1)
+// Captured-style TB abook fragment: table + row refs + ^column^ cells (slice 13)
+< <(a=c)> // (f=iso-8859-1)
+(k=^70^PrimaryEmail^71^DisplayName^72^NickName^73^SecondEmail)
+@20=^70^eve@example.com^71^Eve Example^72^Eve^73^eve.alias@example.com
+@21=<21>(d=PrimaryEmail)>frank@example.net<21>(d=DisplayName)>Frank Example<21>(d=NickName)>Frankie

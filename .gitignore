@@ -10,10 +10,12 @@ obj/
 .cursor
 .superpowers
 docs
-tools
 
 # Local update packages (contain LAN update-server URLs)
 Build/Deploy/
+
+# Fresh-install packages (binaries for optional Release uploads — not source)
+Build/Install/
 
 # Local decompile / transcript scratch (may contain machine paths)
 Build/decompile/
@@ -121,4 +123,9 @@ Build/Out
 # NuGet packages (restore on demand; do not commit WebView2 SDK or runtime)
 **/packages/
 tools/nuget.exe
+
+
+# Local ILSpy / source-recovery scratch
+Build/ilspy-tmp/
+Build/RecoveredBin-*/
 

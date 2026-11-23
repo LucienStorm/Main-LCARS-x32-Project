@@ -1,0 +1,6 @@
+// <! <(meta 1)> // (f=iso-8859-1)
+// Dual (k=) table layout (slice 13 — not single-column drip)
+(k=^55^PrimaryEmail^56^DisplayName)
+(k=^70^PrimaryEmail^71^DisplayName)
+@1=^55^alpha@example.com^56^Alpha One
+@2=^70^beta@example.com^71^Beta Two

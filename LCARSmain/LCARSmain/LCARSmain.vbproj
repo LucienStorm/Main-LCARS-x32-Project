@@ -197,9 +197,11 @@
     <Compile Include="Modules\modSpeech.vb" />
     <Compile Include="Forms\frmQuickControls.vb" />
     <Compile Include="Modules\modHudWeather.vb" />
+    <Compile Include="Modules\modKlingonFont.vb" />
     <Compile Include="Modules\modQuickControls.vb" />
     <Compile Include="Modules\modTray.vb" />
     <Compile Include="Modules\modUpdateStaging.vb" />
+    <Compile Include="Modules\modUtilities.vb" />
     <Compile Include="Modules\modWebView2Runtime.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
@@ -313,6 +315,8 @@
       <Lcid>0</Lcid>
       <WrapperTool>tlbimp</WrapperTool>
       <Isolated>False</Isolated>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>True</Private>
     </COMReference>
     <COMReference Include="SpeechLib">
       <Guid>{C866CA3A-32F7-11D2-9602-00C04F8EE628}</Guid>
@@ -321,6 +325,8 @@
       <Lcid>0</Lcid>
       <WrapperTool>tlbimp</WrapperTool>
       <Isolated>False</Isolated>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>True</Private>
     </COMReference>
   </ItemGroup>
   <ItemGroup>
@@ -344,6 +350,8 @@
     <None Include="Resources\Images\frmmainscreen1.jpg" />
     <None Include="Resources\Please_confirm.wav" />
     <None Include="Resources\folder.bmp" />
+    <EmbeddedResource Include="Resources\Fonts\pIqaD-qolqoS.ttf" />
+    <None Include="Resources\Fonts\LICENSE-pIqaD-qolqoS.txt" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Lcars Web Browser\Lcars Web Browser.vbproj">

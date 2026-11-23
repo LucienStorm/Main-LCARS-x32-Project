@@ -1,0 +1,4 @@
+// <! <(meta 1)> // (f=iso-8859-1)
+(k=^80^PrimaryEmail^81^DisplayName^82^Company^83^WorkPhone^84^HomePhone^85^Notes^86^FirstName^87^LastName)
+@1=<1>(d=PrimaryEmail)>alice@example.com<1>(d=DisplayName)>Alice Example<1>(d=Company)>Starfleet<1>(d=FirstName)>Alice<1>(d=LastName)>Example
+@2=<2>(d=PrimaryEmail)>bob@example.org<2>(d=DisplayName)>Bob Example<2>(d=Company)>Federation

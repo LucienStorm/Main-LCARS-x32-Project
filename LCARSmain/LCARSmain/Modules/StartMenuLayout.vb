@@ -216,8 +216,19 @@ Public Module StartMenuLayout
             End If
             CopyFiltered(classicRoot, root, state)
         End If
+        AddLcarsRootApps(root)
         Return root
     End Function
+
+    ''' <summary>Built-in LCARS utilities shown at the Start Menu root (not Windows shortcuts).</summary>
+    Private Sub AddLcarsRootApps(ByVal root As programList.DirectoryStartItem)
+        If root Is Nothing Then Return
+        root.subItems.Add(MakeFileItem("Calculator", modUtilities.CalculatorExePath()))
+        root.subItems.Add(MakeFileItem("Timer", modUtilities.TimerExePath()))
+        root.subItems.Add(MakeFileItem("Screenshot", modUtilities.ScreenshotExePath()))
+        root.subItems.Add(MakeFileItem("Weather", modUtilities.WeatherExePath()))
+        root.subItems.Add(MakeFileItem("Comms", modUtilities.MailExePath()))
+    End Sub
 
     Private Sub CopyFiltered(ByVal source As programList.DirectoryStartItem, ByVal dest As programList.DirectoryStartItem, ByVal state As LayoutState)
         If source Is Nothing OrElse source.subItems Is Nothing Then Return

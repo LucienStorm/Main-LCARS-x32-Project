@@ -85,6 +85,12 @@ public Class modBusiness
     Dim _isInit As Boolean = False
     Private personalProgramsLayoutBusy As Boolean = False
     Private updateRegionDepth As Integer = 0
+    Private regionRefreshPosted As Boolean
+    Private alternateEdges As List(Of AnchorEdge)
+    Private alternateLayoutBusy As Boolean
+    Private shellWired As Boolean
+    Private commonComponentsReady As Boolean
+    Private reclaimingShell As Boolean
     Dim _hasProgramsList As Boolean = False
     Dim _hasUserButtons As Boolean = False
     Dim _hasTaskbar As Boolean = False
@@ -196,14 +202,36 @@ public Class modBusiness
 #End Region
 
     Public Sub ShutdownScreen()
+        modDiagnostics.LogStep("modBusiness.ShutdownScreen", "enter screen=" & ScreenIndex & " form=" & If(myForm Is Nothing, "null", myForm.Name))
+        Dim leavingKlingon As frmMainscreen5 = TryCast(myForm, frmMainscreen5)
+        If leavingKlingon IsNot Nothing Then
+            leavingKlingon.RestoreDesktopForShutdown()
+        End If
         tmrAutohide.Stop()
         ReturnTray(Me)
         _isInit = False
+        shellWired = False
+        commonComponentsReady = False
+        _hasClock = False
+        _hasWeather = False
+        modHudWeather.DetachScreen(ScreenIndex)
+        modQuickControls.DetachScreen(ScreenIndex)
+        modMediaStrip.DetachScreen(ScreenIndex)
+        myClock = Nothing
+        myWeather = Nothing
+        btnStartEdit = Nothing
+        btnStartMode = Nothing
+        startDragGhost = Nothing
+        startDropMarker = Nothing
+        startDragHandlersWired = False
+        windowMap.Clear()
+        taskbarList.Clear()
         ' Do not DoEvents here — nested inside WM_COPYDATA/SendMessage it can deadlock shutdown.
         If Not myForm Is Nothing Then
             DeregisterAlertForm(myForm)
             myForm.Dispose()
         End If
+        modDiagnostics.LogStep("modBusiness.ShutdownScreen", "exit screen=" & ScreenIndex)
     End Sub
 
     Public Sub myStartMenu_Click(ByVal sender As Object, ByVal e As System.EventArgs)
@@ -849,8 +877,12 @@ public Class modBusiness
     End Sub
 
     Private Sub speech_EnableChanged(ByVal sender As Object, ByVal e As EventArgs)
-        If isInit And hasSpeechIndicator Then
-            mySpeech.Lit = modSpeech.SpeechEnabled
+        If isInit AndAlso hasSpeechIndicator AndAlso mySpeech IsNot Nothing Then
+            Try
+                mySpeech.Lit = modSpeech.SpeechEnabled
+            Catch
+                mySpeech.Lit = False
+            End Try
         End If
     End Sub
 
@@ -889,25 +921,306 @@ public Class modBusiness
     End Sub
 
     Private Sub myForm_Load(ByVal sender As Object, ByVal e As EventArgs)
-        modDiagnostics.LogInfo("modBusiness.myForm_Load", "screen=" & ScreenIndex & " form=" & myForm.Name)
-        myForm.Bounds = Screen.AllScreens(ScreenIndex).Bounds
-        myForm.Show()
-        _isInit = True
-        Dim view1 As frmMainscreen1 = TryCast(myForm, frmMainscreen1)
-        If view1 IsNot Nothing Then view1.EnsureView1ChromeLayout()
-        UpdateRegion()
+        modDiagnostics.LogStep("modBusiness.myForm_Load", "enter screen=" & ScreenIndex & " form=" & myForm.Name & " bounds=" & myForm.Bounds.ToString())
+        Try
+            Dim view1 As frmMainscreen1 = TryCast(myForm, frmMainscreen1)
+            If view1 IsNot Nothing Then
+                ApplyFullscreenBounds()
+                myForm.Show()
+                ApplyFullscreenBounds()
+                _isInit = True
+                view1.EnsureView1ChromeLayout()
+                view1.EnsureSpeechRowFill()
+                UpdateRegion()
+                EnsureCommonComponents()
+                ApplyFullscreenBounds()
+                view1.EnsureView1ChromeLayout()
+                view1.EnsureSpeechRowFill()
+                UpdateRegion()
+                ReclaimShellChrome()
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "view1 init complete bounds=" & myForm.Bounds.ToString())
+                myForm.BeginInvoke(New MethodInvoker(AddressOf OnMainScreenShownRepair))
+            Else
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "alt Show")
+                myForm.Show()
+                _isInit = True
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "alt EnsureCommonComponents")
+                EnsureCommonComponents()
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "alt ApplyFullscreenBounds")
+                ApplyFullscreenBounds()
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "alt FitAlternateView")
+                FitAlternateView()
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "alt RefreshTopPanelPaint")
+                RefreshTopPanelPaint()
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "alt SeparateOverlappingChrome")
+                SeparateOverlappingChrome()
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "alt ReclaimShellChrome")
+                ReclaimShellChrome()
+                modDiagnostics.LogStep("modBusiness.myForm_Load", "alt queueing FinishAlternateView bounds=" & myForm.Bounds.ToString())
+                myForm.BeginInvoke(New MethodInvoker(AddressOf FinishAlternateView))
+            End If
+            ' Pre-warm OSK after chrome is up so the first OSK button press is show/hide only.
+            If ScreenIndex = 0 Then
+                myForm.BeginInvoke(New MethodInvoker(AddressOf PrewarmOskIfNeeded))
+            End If
+        Catch ex As Exception
+            modDiagnostics.LogException("modBusiness.myForm_Load", ex, "screen=" & ScreenIndex & " form=" & If(myForm Is Nothing, "null", myForm.Name))
+        End Try
+    End Sub
+
+    ''' <summary>Forces the mainscreen onto its monitor. A restored window ignores a later Bounds assignment.</summary>
+    Private Sub ApplyFullscreenBounds()
+        If myForm Is Nothing OrElse myForm.IsDisposed OrElse Not myForm.IsHandleCreated Then Return
+        If ScreenIndex < 0 OrElse ScreenIndex >= Screen.AllScreens.Length Then Return
+        If myForm.WindowState <> FormWindowState.Normal Then
+            myForm.WindowState = FormWindowState.Normal
+        End If
+        myForm.MaximumSize = Size.Empty
+        myForm.MinimumSize = Size.Empty
+        Dim target As Rectangle = Screen.AllScreens(ScreenIndex).Bounds
+        If myForm.Bounds = target Then Return
+        ' A region built at the designer size does not grow with the window.
+        myForm.Region = Nothing
+        SetWindowPos(myForm.Handle, IntPtr.Zero, target.X, target.Y, target.Width, target.Height, SetWindowPosFlags.IgnoreZOrder Or SetWindowPosFlags.DoNotActivate)
+        If myForm.Bounds <> target Then
+            myForm.Bounds = target
+        End If
+    End Sub
+
+    Private Function MonitorBounds() As Rectangle
+        If ScreenIndex < 0 OrElse ScreenIndex >= Screen.AllScreens.Length Then
+            Return Screen.PrimaryScreen.Bounds
+        End If
+        Return Screen.AllScreens(ScreenIndex).Bounds
+    End Function
+
+    Private Sub ReleaseWorkingAreaToMonitor()
+        If ScreenIndex < 0 OrElse ScreenIndex >= Screen.AllScreens.Length Then Return
+        Dim target As Rectangle = Screen.AllScreens(ScreenIndex).Bounds
+        resizeWorkingArea(target.X, target.Y, target.Width, target.Height, broadcast:=False)
+    End Sub
+
+    ''' <summary>
+    ''' Puts modes 2–4 on the monitor. The original anchors stretch the frame;
+    ''' this does not move individual buttons.
+    ''' </summary>
+    Private Sub FitAlternateView()
+        If alternateLayoutBusy OrElse myForm Is Nothing OrElse myForm.IsDisposed Then Return
+        If TypeOf myForm Is frmMainscreen1 Then Return
+        alternateLayoutBusy = True
+        Try
+            KeepToolWindow()
+            ApplyFullscreenBounds()
+            If _isInit Then UpdateRegion()
+            ReclaimShellChrome()
+            modDiagnostics.LogStep("modBusiness.FitAlternateView",
+                "screen=" & ScreenIndex &
+                " target=" & MonitorBounds().ToString() &
+                " form=" & myForm.Bounds.ToString() &
+                " client=" & myForm.ClientSize.ToString() &
+                " bar=" & If(tryLoadComponent("pnlMainBar") Is Nothing, "null", tryLoadComponent("pnlMainBar").Bounds.ToString()))
+        Catch ex As Exception
+            modDiagnostics.LogException("modBusiness.FitAlternateView", ex, "screen=" & ScreenIndex)
+        Finally
+            alternateLayoutBusy = False
+        End Try
+    End Sub
+
+    ''' <summary>Second pass after the form is on screen: clock, top panel, and the Windows taskbar.</summary>
+    Private Sub FinishAlternateView()
+        If myForm Is Nothing OrElse myForm.IsDisposed OrElse Not _isInit Then Return
+        If TypeOf myForm Is frmMainscreen1 Then Return
+        modDiagnostics.LogStep("modBusiness.FinishAlternateView", "enter screen=" & ScreenIndex & " form=" & myForm.Name & " bounds=" & myForm.Bounds.ToString())
+        Try
+            RepairAlternateViewIfShort()
+            EnsureCommonComponents()
+            RefreshClockBinding(Me)
+            RefreshTopPanelPaint()
+            SeparateOverlappingChrome()
+            ReclaimShellChrome()
+            modDiagnostics.LogStep("modBusiness.FinishAlternateView", "exit screen=" & ScreenIndex & " bounds=" & myForm.Bounds.ToString())
+        Catch ex As Exception
+            modDiagnostics.LogException("modBusiness.FinishAlternateView", ex, "screen=" & ScreenIndex)
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Mode 2's top panel stays black until it is hidden and shown. Do that once after the first layout.
+    ''' </summary>
+    Private Sub RefreshTopPanelPaint()
+        Dim top As Control = tryLoadComponent("pnlTopPanel")
+        If top Is Nothing Then Return
+        top.BringToFront()
+        If top.Visible Then
+            top.Visible = False
+            top.Visible = True
+            top.BringToFront()
+        End If
+        top.Invalidate(True)
+    End Sub
+
+    ''' <summary>
+    ''' Keeps a widened Media Viewer button from covering the mode button beside it.
+    ''' The designed overlap is about 14px; anything past that is a bad stretch.
+    ''' </summary>
+    Private Sub SeparateOverlappingChrome()
+        Dim photo As Control = tryLoadComponent("myPhoto")
+        Dim modes As Control = tryLoadComponent("myModeSelect")
+        If photo Is Nothing OrElse modes Is Nothing Then Return
+        If Not Object.ReferenceEquals(photo.Parent, modes.Parent) Then Return
+        Dim web As Control = tryLoadComponent("fbWebBrowser")
+        If web IsNot Nothing AndAlso Object.ReferenceEquals(web.Parent, photo.Parent) AndAlso web.Left = photo.Left AndAlso web.Width > 0 Then
+            If photo.Width <> web.Width Then photo.Width = web.Width
+            Return
+        End If
+        If photo.Bottom <= modes.Top OrElse modes.Bottom <= photo.Top Then Return
+        If photo.Right <= modes.Left Then Return
+        Dim width As Integer = modes.Left - 6 - photo.Left
+        If width >= 60 Then photo.Width = width
+    End Sub
+
+    ''' <summary>Paints the clock and taskbar once the controls have been wired.</summary>
+    Private Sub EnsureCommonComponents()
+        If Not shellWired OrElse commonComponentsReady Then Return
+        If myForm Is Nothing OrElse myForm.IsDisposed Then Return
+        commonComponentsReady = True
+        Try
+            If _hasTaskbar AndAlso modSettings.ShowTrayIcons(ScreenIndex) Then
+                myShowTrayButton_Click(Nothing, Nothing)
+            End If
+        Catch ex As Exception
+            modDiagnostics.LogException("modBusiness.EnsureCommonComponents.ShowTray", ex, "screen=" & ScreenIndex)
+        End Try
         initCommonComponents(Me)
-        ' initCommonComponents can snap View1 panels back to designer sizes — repair before desktop area sticks.
-        If view1 IsNot Nothing Then
-            view1.EnsureView1ChromeLayout()
-            view1.EnsureSpeechRowFill()
-            UpdateRegion()
-        End If
-        modDiagnostics.LogInfo("modBusiness.myForm_Load", "screen=" & ScreenIndex & " init complete")
-        ' Pre-warm OSK after chrome is up so the first OSK button press is show/hide only.
-        If ScreenIndex = 0 Then
-            myForm.BeginInvoke(New MethodInvoker(AddressOf PrewarmOskIfNeeded))
-        End If
+    End Sub
+
+    ''' <summary>Hides the Windows taskbar after a mode change. A full-monitor working area shows it again.</summary>
+    Private Sub ReclaimShellChrome()
+        If reclaimingShell Then Return
+        reclaimingShell = True
+        Try
+            ShowTaskBar(False)
+        Finally
+            reclaimingShell = False
+        End Try
+    End Sub
+
+    Private Sub KeepToolWindow()
+        Dim currentStyle As Integer = GetWindowLong_Safe(myForm.Handle, GWL_EXSTYLE)
+        Dim toolStyle As Integer = currentStyle Or WS_EX_TOOLWINDOW
+        If toolStyle = currentStyle Then Return
+        SetWindowLong_Safe(myForm.Handle, GWL_EXSTYLE, toolStyle)
+        ' The extended style is ignored until the frame is recalculated. Do that without moving the window.
+        SetWindowPos(myForm.Handle, IntPtr.Zero, 0, 0, 0, 0, SetWindowPosFlags.IgnoreMove Or SetWindowPosFlags.IgnoreResize Or SetWindowPosFlags.IgnoreZOrder Or SetWindowPosFlags.FrameChanged)
+    End Sub
+
+    ''' <summary>Second pass if Windows left the new mode short of the monitor.</summary>
+    Private Sub RepairAlternateViewIfShort()
+        If myForm Is Nothing OrElse myForm.IsDisposed OrElse Not _isInit Then Return
+        If TypeOf myForm Is frmMainscreen1 Then Return
+        If FormCoversMonitor() Then Return
+        FitAlternateView()
+    End Sub
+
+    Private Function FormCoversMonitor() As Boolean
+        Dim target As Rectangle = MonitorBounds()
+        Return Math.Abs(myForm.Bounds.X - target.X) < 8 AndAlso
+            Math.Abs(myForm.Bounds.Y - target.Y) < 8 AndAlso
+            Math.Abs(myForm.Bounds.Width - target.Width) < 8 AndAlso
+            Math.Abs(myForm.Bounds.Height - target.Height) < 8
+    End Function
+
+    ''' <summary>Records one level of anchor edges on the form and on the main bar, before the window is shown.</summary>
+    Private Sub RememberAlternateEdges()
+        alternateEdges = New List(Of AnchorEdge)
+        RememberEdges(myForm)
+        Dim bar As Control = tryLoadComponent("pnlMainBar")
+        If bar IsNot Nothing Then RememberEdges(bar)
+    End Sub
+
+    Private Sub RememberEdges(ByVal parent As Control)
+        For Each child As Control In parent.Controls
+            Dim edge As New AnchorEdge()
+            edge.Ctrl = child
+            edge.LeftM = child.Left
+            edge.TopM = child.Top
+            edge.RightM = parent.ClientSize.Width - child.Right
+            edge.BottomM = parent.ClientSize.Height - child.Bottom
+            edge.W = child.Width
+            edge.H = child.Height
+            alternateEdges.Add(edge)
+        Next
+    End Sub
+
+    ''' <summary>Applies remembered edges for direct children of one parent. Leaves start-menu contents alone.</summary>
+    Private Sub ApplyAlternateEdges(ByVal parent As Control)
+        If alternateEdges Is Nothing OrElse parent Is Nothing Then Return
+        Dim startOpen As Boolean = False
+        Dim startPanel As Control = tryLoadComponent("pnlStart")
+        If startPanel IsNot Nothing Then startOpen = startPanel.Visible
+        For Each edge As AnchorEdge In alternateEdges
+            Dim child As Control = edge.Ctrl
+            If child Is Nothing OrElse child.IsDisposed OrElse Not Object.ReferenceEquals(child.Parent, parent) Then Continue For
+            Dim flags As AnchorStyles = child.Anchor
+            Dim left As Integer = child.Left
+            Dim top As Integer = child.Top
+            Dim width As Integer = child.Width
+            Dim height As Integer = child.Height
+            Dim parentW As Integer = parent.ClientSize.Width
+            Dim parentH As Integer = parent.ClientSize.Height
+            Dim hasL As Boolean = (flags And AnchorStyles.Left) = AnchorStyles.Left
+            Dim hasR As Boolean = (flags And AnchorStyles.Right) = AnchorStyles.Right
+            Dim hasT As Boolean = (flags And AnchorStyles.Top) = AnchorStyles.Top
+            Dim hasB As Boolean = (flags And AnchorStyles.Bottom) = AnchorStyles.Bottom
+            If hasL AndAlso hasR Then
+                left = edge.LeftM
+                width = Math.Max(1, parentW - edge.LeftM - edge.RightM)
+            ElseIf hasR Then
+                left = parentW - edge.RightM - edge.W
+                width = edge.W
+            ElseIf hasL Then
+                left = edge.LeftM
+                width = edge.W
+            End If
+            If hasT AndAlso hasB Then
+                top = edge.TopM
+                height = Math.Max(1, parentH - edge.TopM - edge.BottomM)
+            ElseIf hasB Then
+                top = parentH - edge.BottomM - edge.H
+                height = edge.H
+            ElseIf hasT Then
+                top = edge.TopM
+                height = edge.H
+            End If
+            ' An open start column shifts the desktop hole. Keep that shift.
+            If startOpen AndAlso String.Equals(child.Name, "pnlMain", StringComparison.Ordinal) Then
+                left = child.Left
+                width = Math.Max(1, parentW - left - edge.RightM)
+            End If
+            If child.Left <> left OrElse child.Top <> top OrElse child.Width <> width OrElse child.Height <> height Then
+                child.SetBounds(left, top, Math.Max(1, width), Math.Max(1, height))
+            End If
+        Next
+    End Sub
+
+    Private Class AnchorEdge
+        Public Ctrl As Control
+        Public LeftM As Integer
+        Public RightM As Integer
+        Public TopM As Integer
+        Public BottomM As Integer
+        Public W As Integer
+        Public H As Integer
+    End Class
+
+    Private Sub OnMainScreenShownRepair()
+        Dim view1 As frmMainscreen1 = TryCast(myForm, frmMainscreen1)
+        If view1 Is Nothing OrElse myForm.IsDisposed OrElse Not _isInit Then Return
+        ApplyFullscreenBounds()
+        view1.EnsureView1ChromeLayout()
+        view1.EnsureSpeechRowFill()
+        UpdateRegion()
+        modQuickControls.ScheduleSyncQuickButton(Me)
     End Sub
 
     ''' <summary>
@@ -948,6 +1261,8 @@ public Class modBusiness
         'mainscreen are done through this module, it is imperative that it be
         'called as soon as they are created.
 
+        shellWired = False
+        commonComponentsReady = False
 
         'Get required components: Main screen cannot function without these
         myForm = curForm
@@ -965,12 +1280,6 @@ public Class modBusiness
             AddHandler myForm.FormClosing, AddressOf myForm_Closing
             AddHandler myMainPanel.Resize, AddressOf myMainPanel_Resize
             AddHandler myModeSelect.Click, AddressOf myModeSelectButton_Click
-
-            'Set the form's extended style to "WS_EX_TOOLWINDOW" which allows it
-            'to stay fullscreen instead of being resized by the working area.
-            Dim currentStyle As Integer = GetWindowLong_Safe(myForm.Handle, GWL_EXSTYLE)
-            currentStyle = currentStyle Or (WS_EX_TOOLWINDOW)
-            SetWindowLong_Safe(myForm.Handle, GWL_EXSTYLE, currentStyle)
         End If
 
         'Get programs list components: All components needed for program list in start menu
@@ -1046,9 +1355,6 @@ public Class modBusiness
             windowMap.Clear()
             taskbarList.Clear()
             taskbarOffset = 0
-            If modSettings.ShowTrayIcons(ScreenIndex) Then
-                myShowTrayButton_Click(Nothing, Nothing)
-            End If
             modQuickControls.AttachToTray(Me)
         End If
 
@@ -1089,7 +1395,12 @@ public Class modBusiness
         _hasSpeechIndicator = mySpeech IsNot Nothing
         If _hasSpeechIndicator Then
             AddHandler mySpeech.Click, AddressOf mySpeech_Click
-            mySpeech.Lit = modSpeech.SpeechEnabled
+            Try
+                mySpeech.Lit = modSpeech.SpeechEnabled
+            Catch
+                ' Speech interop missing — leave indicator unlit; shell must still start.
+                mySpeech.Lit = False
+            End Try
         End If
 
         'Common Buttons: Only have a click event to associate, and that's it.
@@ -1119,21 +1430,52 @@ public Class modBusiness
         tryAssocButton("fbDesktop", myDesktopFiles, AddressOf myDesktopFiles_Click)
         tryAssocButton("fbMyNetwork", myNetworkPlaces, AddressOf myNetworkPlaces_Click)
 
-        'Final setup
+        'Final setup. The handle is created here, after the clock is wired,
+        'and only after the working area is the full monitor. Otherwise Windows
+        'creates the new mode inside the previous mode's desktop hole.
+        modDiagnostics.LogStep("modBusiness.init", "loadLanguage screen=" & ScreenIndex & " form=" & myForm.Name)
         loadLanguage()
+        modDiagnostics.LogStep("modBusiness.init", "SetBeeping + RegisterAlertForm")
         LCARS.SetBeeping(myForm, modSettings.ButtonBeep)
         RegisterAlertForm(myForm)
+        shellWired = True
+        modDiagnostics.LogStep("modBusiness.init", "PrepareMonitorWindow")
+        PrepareMonitorWindow()
 
-        'load Autohide settings:
         tmrAutohide.Interval = 100
+        modDiagnostics.LogStep("modBusiness.init", "SetAutoHide")
         If modSettings.AutoHide(ScreenIndex) Then
             SetAutoHide(IAutohide.AutoHideModes.Visible)
         Else
             SetAutoHide(IAutohide.AutoHideModes.Disabled)
         End If
+        modDiagnostics.LogStep("modBusiness.init", "EnsureCommonComponents + ReclaimShellChrome")
+        EnsureCommonComponents()
+        ReclaimShellChrome()
+        modDiagnostics.LogStep("modBusiness.init", "complete screen=" & ScreenIndex & " form=" & myForm.Name & " bounds=" & myForm.Bounds.ToString())
+    End Sub
+
+    ''' <summary>Creates the handle on the full monitor, then stretches the designer frame to that monitor.</summary>
+    Private Sub PrepareMonitorWindow()
+        ReleaseWorkingAreaToMonitor()
+        myForm.StartPosition = FormStartPosition.Manual
+        myForm.MaximumSize = Size.Empty
+        myForm.MinimumSize = Size.Empty
+        Dim monitor As Rectangle = MonitorBounds()
+        ' Handle first, at the designer size, so the following resize runs the original anchors.
+        myForm.Location = New Point(monitor.X, monitor.Y)
+        KeepToolWindow()
+        ApplyFullscreenBounds()
+        modDiagnostics.LogStep("modBusiness.PrepareMonitorWindow", "done bounds=" & myForm.Bounds.ToString() & " client=" & myForm.ClientSize.ToString())
     End Sub
 
     Public Sub loadLanguage()
+        ' Mode 5 (Klingon tactical interface) uses its own Klingonese lexicon + optional Terran subtitles.
+        Dim view5 As frmMainscreen5 = TryCast(myForm, frmMainscreen5)
+        If view5 IsNot Nothing Then
+            view5.ApplyKlingonLabels()
+            Return
+        End If
         Try
             Dim strinput As String = ""
             Dim split() As String
@@ -1231,6 +1573,8 @@ public Class modBusiness
 
 #Region " Taskbar buttons "
     Public Sub AddWindow(ByVal window As ExternalApp)
+        If window Is Nothing OrElse myAppsPanel Is Nothing OrElse myAppsPanel.IsDisposed Then Return
+        If windowMap.ContainsKey(window) Then Return
         Dim newItem As New TaskbarItem(window, Me, taskbarList.Count)
         newItem.Offset = taskbarOffset
         taskbarList.Add(newItem)
@@ -1238,16 +1582,20 @@ public Class modBusiness
     End Sub
 
     Public Sub RemoveWindow(ByVal window As ExternalApp)
+        If window Is Nothing OrElse Not windowMap.ContainsKey(window) Then Return
         Dim oldItem As TaskbarItem = windowMap(window)
         windowMap.Remove(window)
         For i As Integer = oldItem.Index + 1 To taskbarList.Count - 1
             taskbarList(i).Index = i - 1
         Next
-        taskbarList.RemoveAt(oldItem.Index)
+        If oldItem.Index >= 0 AndAlso oldItem.Index < taskbarList.Count Then
+            taskbarList.RemoveAt(oldItem.Index)
+        End If
         oldItem.Remove()
     End Sub
 
     Public Sub UpdateWindow(ByVal window As ExternalApp, ByVal flags As WindowUpdateFlags)
+        If window Is Nothing OrElse Not windowMap.ContainsKey(window) Then Return
         windowMap(window).Update(flags)
     End Sub
 
@@ -1414,6 +1762,8 @@ public Class modBusiness
     Private Sub EnsureStartLayoutButtons()
         Dim startPanel As Control = tryLoadComponent("pnlStart")
         If startPanel Is Nothing Then Return
+        If btnStartEdit IsNot Nothing AndAlso btnStartEdit.IsDisposed Then btnStartEdit = Nothing
+        If btnStartMode IsNot Nothing AndAlso btnStartMode.IsDisposed Then btnStartMode = Nothing
         If btnStartEdit Is Nothing Then
             Dim existingEdit As Control = tryLoadComponent("fbStartEdit")
             If existingEdit IsNot Nothing Then
@@ -1462,24 +1812,104 @@ public Class modBusiness
                 AddHandler btnStartMode.Click, AddressOf StartMode_Click
             End If
         End If
-        ' MODE stays bottom-left next to RUN PROGRAM.
+        ' MODE stays beside Run when that spot is empty. Otherwise it takes the first open spot
+        ' so it cannot land on top of Mode Select.
         If btnStartMode IsNot Nothing Then
             Dim runBtn As Control = tryLoadComponent("myRun")
-            Dim modeY As Integer = startPanel.Height - 46
-            Dim modeX As Integer = 66
-            If runBtn IsNot Nothing Then
-                modeY = runBtn.Top
-                modeX = runBtn.Right + 4
-                btnStartMode.Height = Math.Max(18, runBtn.Height)
+            Dim modeW As Integer = 70
+            Dim modeH As Integer = 20
+            If runBtn IsNot Nothing AndAlso Object.ReferenceEquals(runBtn.Parent, startPanel) Then
+                modeH = Math.Max(18, runBtn.Height)
             End If
-            btnStartMode.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
-            btnStartMode.Location = New Point(modeX, modeY)
-            btnStartMode.Width = 70
+            btnStartMode.Size = New Size(modeW, modeH)
+            btnStartMode.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+            Dim preferred As New Point(4, Math.Max(0, startPanel.ClientSize.Height - modeH - 4))
+            If runBtn IsNot Nothing AndAlso Object.ReferenceEquals(runBtn.Parent, startPanel) Then
+                Dim beside As New Point(runBtn.Right + 4, runBtn.Top)
+                If beside.X + modeW <= startPanel.ClientSize.Width Then
+                    Dim besideRect As New Rectangle(beside, New Size(modeW, modeH))
+                    If Not StartSpotHitsControl(startPanel, besideRect) Then preferred = beside
+                End If
+            End If
+            btnStartMode.Location = FindOpenStartSpot(startPanel, btnStartMode.Size, preferred)
             btnStartMode.BringToFront()
         End If
         If btnStartEdit IsNot Nothing Then btnStartEdit.BringToFront()
+        EnsureStartNavParityButtons(startPanel)
         WireStartEditInputHandlers()
         UpdateStartLayoutButtonLabels()
+    End Sub
+
+    ''' <summary>
+    ''' Views 2–4 historically omitted some Start Menu launchers that View 1 has.
+    ''' Inject any missing named buttons so tryAssocButton wiring stays consistent.
+    ''' </summary>
+    Private Sub EnsureStartNavParityButtons(ByVal startPanel As Control)
+        If startPanel Is Nothing Then Return
+        Dim anchor As Control = tryLoadComponent("myRun")
+        If anchor Is Nothing OrElse Not Object.ReferenceEquals(anchor.Parent, startPanel) Then
+            anchor = tryLoadComponent("fbWebBrowser")
+        End If
+        If anchor Is Nothing OrElse Not Object.ReferenceEquals(anchor.Parent, startPanel) Then
+            anchor = Nothing
+        End If
+        Dim w As Integer = 120
+        Dim h As Integer = 24
+        Dim preferredX As Integer = 3
+        If anchor IsNot Nothing Then
+            preferredX = anchor.Left
+            w = Math.Max(100, anchor.Width)
+            h = Math.Max(22, anchor.Height)
+        End If
+        Dim names() As String = {"fbTerminal", "fbDesktop", "fbMyNetwork"}
+        Dim captions() As String = {"TERMINAL", "DESKTOP FILES", "NETWORK PLACES"}
+        Dim nextPreferred As New Point(preferredX, 4)
+        For i As Integer = 0 To names.Length - 1
+            If tryLoadComponent(names(i)) IsNot Nothing Then Continue For
+            Dim spot As Point = FindOpenStartSpot(startPanel, New Size(w, h), nextPreferred)
+            EnsureNamedStartButton(startPanel, names(i), captions(i), spot, New Size(w, h))
+            nextPreferred = New Point(spot.X, spot.Y + h + 4)
+        Next
+    End Sub
+
+    ''' <summary>Finds a spot in the start menu that does not cover an existing button.</summary>
+    Private Function FindOpenStartSpot(ByVal panel As Control, ByVal sz As Size, ByVal preferred As Point) As Point
+        Dim x As Integer = Math.Max(0, Math.Min(preferred.X, Math.Max(0, panel.ClientSize.Width - sz.Width)))
+        Dim y As Integer = Math.Max(0, preferred.Y)
+        For guard As Integer = 0 To 48
+            If y + sz.Height > panel.ClientSize.Height Then
+                y = 0
+                x = Math.Max(0, x - sz.Width - 6)
+            End If
+            Dim candidate As New Rectangle(x, y, sz.Width, sz.Height)
+            If Not StartSpotHitsControl(panel, candidate) Then Return New Point(x, y)
+            y += sz.Height + 4
+        Next
+        Return New Point(x, Math.Max(0, panel.ClientSize.Height - sz.Height))
+    End Function
+
+    Private Function StartSpotHitsControl(ByVal panel As Control, ByVal candidate As Rectangle) As Boolean
+        For Each child As Control In panel.Controls
+            If child Is Nothing OrElse Not child.Visible Then Continue For
+            If child.Width <= 0 OrElse child.Height <= 0 Then Continue For
+            If child.Bounds.IntersectsWith(candidate) Then Return True
+        Next
+        Return False
+    End Function
+
+    Private Sub EnsureNamedStartButton(ByVal startPanel As Control, ByVal name As String, ByVal caption As String, ByVal loc As Point, ByVal sz As Size)
+        If tryLoadComponent(name) IsNot Nothing Then Return
+        Dim fb As New LCARS.Controls.FlatButton()
+        fb.Name = name
+        fb.ButtonText = caption
+        fb.Text = caption
+        fb.Location = loc
+        fb.Size = sz
+        fb.ButtonTextAlign = ContentAlignment.BottomRight
+        fb.Color = LCARS.LCARScolorStyles.NavigationFunction
+        fb.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+        startPanel.Controls.Add(fb)
+        fb.BringToFront()
     End Sub
 
     Private Sub WireStartEditInputHandlers()
@@ -1905,7 +2335,7 @@ public Class modBusiness
     Private Sub startItem_click(ByVal sender As Object, ByVal e As System.EventArgs)
         If startDragging Then Return
         Dim btn As LCARS.LightweightControls.LCFlatButton = CType(sender, LCARS.LightweightControls.LCFlatButton)
-        Dim target As String = CStr(btn.Data)
+        Dim target As String = If(btn.Data Is Nothing, "", CStr(btn.Data))
         If startEditMode Then
             ' Edit mode: remove pin or hide classic item instead of launching.
             If IsBrowsingPinnedFolder() Then
@@ -1935,56 +2365,102 @@ public Class modBusiness
             loadProgList(curProgIndex)
             Return
         End If
-        If ProgramsPanel.Visible Then myStartMenu.doClick(sender, e)
-        Application.DoEvents()
-        Dim myprocess As New System.Diagnostics.Process()
-        myprocess.StartInfo.FileName = target
-        launchProcessOnScreen(myprocess)
+        ' Launch before closing Start Menu. Closing + DoEvents during ProgramsPanel MouseUp
+        ' hid the panel mid-event, left buttons stuck white, and skipped launches.
+        modDiagnostics.LogTouch("StartMenu", "startItem_click target=" & target)
+        Try
+            Dim utilExe As String = modUtilities.ResolveUtilityExe(target)
+            Dim myprocess As New System.Diagnostics.Process()
+            If utilExe IsNot Nothing Then
+                If Not File.Exists(utilExe) Then
+                    MsgBox("Utility not found:" & vbCrLf & utilExe)
+                Else
+                    myprocess.StartInfo.FileName = utilExe
+                    myprocess.StartInfo.WorkingDirectory = Path.GetDirectoryName(utilExe)
+                    launchProcessOnScreen(myprocess)
+                End If
+            ElseIf String.IsNullOrEmpty(target) Then
+                modDiagnostics.LogWarn("modBusiness.startItem_click", "empty target")
+            Else
+                myprocess.StartInfo.FileName = target
+                If File.Exists(target) Then
+                    myprocess.StartInfo.WorkingDirectory = Path.GetDirectoryName(target)
+                End If
+                launchProcessOnScreen(myprocess)
+            End If
+        Catch ex As Exception
+            modDiagnostics.LogException("modBusiness.startItem_click", ex, "target=" & target)
+            MsgBox("Unable to start: " & target & vbCrLf & ex.Message)
+        End Try
+        CloseStartMenuIfOpen(sender, e)
+    End Sub
+
+    Private Sub CloseStartMenuIfOpen(ByVal sender As Object, ByVal e As EventArgs)
+        If ProgramsPanel Is Nothing OrElse Not ProgramsPanel.Visible Then Return
+        If myStartMenu Is Nothing Then Return
+        Try
+            myStartMenu.doClick(sender, e)
+        Catch ex As Exception
+            modDiagnostics.LogException("modBusiness.CloseStartMenuIfOpen", ex)
+        End Try
     End Sub
 #End Region
 
     'Used for buttons in Personal Programs (userbuttons)
     Private Sub myfile_click(ByVal sender As Object, ByVal e As System.EventArgs)
-        If UserButtonsPanel.Visible Then
-            myUserButtons.doClick(sender, e)
-        End If
-        Application.DoEvents()
-        Dim cmdLine As String = CType(CType(sender, LCARS.LightweightControls.LCFlatButton).Data, String).Trim()
+        Dim cmdLine As String = ""
+        Try
+            cmdLine = CType(CType(sender, LCARS.LightweightControls.LCFlatButton).Data, String).Trim()
+        Catch
+            cmdLine = ""
+        End Try
+        modDiagnostics.LogTouch("PersonalPrograms", "myfile_click cmd=" & cmdLine)
         Dim myprocess As New Process()
-        If File.Exists(cmdLine) Then
-            'The command string is an absolute path.
-            myprocess.StartInfo.FileName = cmdLine
-            myprocess.StartInfo.WorkingDirectory = Path.GetDirectoryName(cmdLine)
-            launchProcessOnScreen(myprocess)
-        Else
-            'The command will be interpreted as a command followed by arguments
-            Try
-                If (cmdLine.Substring(0, 1) = """") Then
-                    Dim splitIndex As Integer = cmdLine.Substring(1).IndexOf("""") + 2
-                    myprocess.StartInfo.FileName = cmdLine.Substring(0, splitIndex)
-                    myprocess.StartInfo.Arguments = cmdLine.Substring(splitIndex + 1)
-                Else
-                    myprocess.StartInfo.FileName = cmdLine.Split(" "c)(0)
-                    myprocess.StartInfo.Arguments = cmdLine.Substring(myprocess.StartInfo.FileName.Length + 1)
-                End If
-                'If full path specified, set working directory to containing folder
-                If File.Exists(myprocess.StartInfo.FileName) Then
-                    myprocess.StartInfo.WorkingDirectory = Path.GetDirectoryName(myprocess.StartInfo.FileName)
-                End If
+        Try
+            If File.Exists(cmdLine) Then
+                'The command string is an absolute path.
+                myprocess.StartInfo.FileName = cmdLine
+                myprocess.StartInfo.WorkingDirectory = Path.GetDirectoryName(cmdLine)
                 launchProcessOnScreen(myprocess)
-            Catch ex As Exception
-                Debug.Print("Failed to interpret command line")
-                'Throw it to shell and see what happens.
+            ElseIf Not String.IsNullOrEmpty(cmdLine) Then
+                'The command will be interpreted as a command followed by arguments
                 Try
-                    Dim myID As Integer
-                    myID = Shell(cmdLine, AppWinStyle.NormalFocus)
-                    myprocess = Process.GetProcessById(myID)
-                    launchProcessOnScreen(myprocess, False)
-                Catch ex2 As ArgumentException
-                    'Process already exited before we could get it.
-                Catch ex2 As FileNotFoundException
-                    MsgBox("Bad command string: " & cmdLine)
+                    If (cmdLine.Substring(0, 1) = """") Then
+                        Dim splitIndex As Integer = cmdLine.Substring(1).IndexOf("""") + 2
+                        myprocess.StartInfo.FileName = cmdLine.Substring(0, splitIndex)
+                        myprocess.StartInfo.Arguments = cmdLine.Substring(splitIndex + 1)
+                    Else
+                        myprocess.StartInfo.FileName = cmdLine.Split(" "c)(0)
+                        myprocess.StartInfo.Arguments = cmdLine.Substring(myprocess.StartInfo.FileName.Length + 1)
+                    End If
+                    'If full path specified, set working directory to containing folder
+                    If File.Exists(myprocess.StartInfo.FileName) Then
+                        myprocess.StartInfo.WorkingDirectory = Path.GetDirectoryName(myprocess.StartInfo.FileName)
+                    End If
+                    launchProcessOnScreen(myprocess)
+                Catch ex As Exception
+                    Debug.Print("Failed to interpret command line")
+                    'Throw it to shell and see what happens.
+                    Try
+                        Dim myID As Integer
+                        myID = Shell(cmdLine, AppWinStyle.NormalFocus)
+                        myprocess = Process.GetProcessById(myID)
+                        launchProcessOnScreen(myprocess, False)
+                    Catch ex2 As ArgumentException
+                        'Process already exited before we could get it.
+                    Catch ex2 As FileNotFoundException
+                        MsgBox("Bad command string: " & cmdLine)
+                    End Try
                 End Try
+            End If
+        Catch ex As Exception
+            modDiagnostics.LogException("modBusiness.myfile_click", ex, "cmd=" & cmdLine)
+        End Try
+        ' Close Personal Programs after launch — never DoEvents while the panel is in MouseUp.
+        If UserButtonsPanel IsNot Nothing AndAlso UserButtonsPanel.Visible AndAlso myUserButtons IsNot Nothing Then
+            Try
+                myUserButtons.doClick(sender, e)
+            Catch
             End Try
         End If
     End Sub
@@ -1992,25 +2468,55 @@ public Class modBusiness
     Public Sub launchProcessOnScreen(ByVal myProcess As Process, Optional ByVal needsStart As Boolean = True)
         If needsStart Then
             Try
+                If String.IsNullOrEmpty(myProcess.StartInfo.FileName) Then
+                    modDiagnostics.LogWarn("modBusiness.launchProcessOnScreen", "empty FileName")
+                    Return
+                End If
                 If Not myProcess.Start() Then Return
             Catch ex As System.ComponentModel.Win32Exception
+                modDiagnostics.LogException("modBusiness.launchProcessOnScreen", ex, myProcess.StartInfo.FileName)
                 MsgBox("Unable to start process")
+                Return
+            Catch ex As Exception
+                modDiagnostics.LogException("modBusiness.launchProcessOnScreen", ex, myProcess.StartInfo.FileName)
+                MsgBox("Unable to start process: " & ex.Message)
                 Return
             End Try
         End If
-        Dim sw As New Stopwatch()
-        sw.Start()
-        Do Until myProcess.HasExited OrElse _
-                 myProcess.MainWindowHandle <> IntPtr.Zero OrElse _
-                 sw.ElapsedMilliseconds > 15000L
-            myProcess.Refresh()
-            Threading.Thread.Sleep(50)
-        Loop
-        sw.Stop()
-        If Not myProcess.HasExited AndAlso _
-               myProcess.MainWindowHandle <> IntPtr.Zero Then
-            MoveToScreen(myProcess.MainWindowHandle)
-        End If
+        ' Wait off the shell UI thread. Comms registers with SendMessage during startup;
+        ' blocking here deadlocks that call and freezes the desktop when LCARS is the shell.
+        Threading.ThreadPool.QueueUserWorkItem(AddressOf WaitAndMoveLaunchedProcess, myProcess)
+    End Sub
+
+    Private Sub WaitAndMoveLaunchedProcess(ByVal state As Object)
+        Dim launched As Process = TryCast(state, Process)
+        If launched Is Nothing Then Return
+        Try
+            Dim sw As New Stopwatch()
+            sw.Start()
+            Dim hwnd As IntPtr = IntPtr.Zero
+            Do
+                Try
+                    If launched.HasExited Then Return
+                    launched.Refresh()
+                    hwnd = launched.MainWindowHandle
+                Catch
+                    Return
+                End Try
+                If hwnd <> IntPtr.Zero Then Exit Do
+                If sw.ElapsedMilliseconds > 15000L Then Return
+                Threading.Thread.Sleep(50)
+            Loop
+            If myForm Is Nothing OrElse myForm.IsDisposed OrElse Not myForm.IsHandleCreated Then Return
+            Dim target As IntPtr = hwnd
+            myForm.BeginInvoke(New MethodInvoker(Sub()
+                                                     Try
+                                                         MoveToScreen(target)
+                                                     Catch
+                                                     End Try
+                                                 End Sub))
+        Catch
+        End Try
     End Sub
 
 
@@ -2144,7 +2650,7 @@ public Class modBusiness
             " isInit=" & isInit &
             " layoutBusy=" & personalProgramsLayoutBusy &
             " size=" & If(myMainPanel Is Nothing, "null", myMainPanel.Size.ToString()))
-        If isInit AndAlso Not personalProgramsLayoutBusy Then
+        If isInit AndAlso Not personalProgramsLayoutBusy AndAlso Not alternateLayoutBusy AndAlso Not reclaimingShell Then
             Dim view1 As frmMainscreen1 = TryCast(myForm, frmMainscreen1)
             If view1 IsNot Nothing AndAlso myForm.ClientSize.Width > 1000 AndAlso myMainPanel IsNot Nothing Then
                 If myMainPanel.Width < CInt(myForm.ClientSize.Width * 0.5) Then
@@ -2156,15 +2662,24 @@ public Class modBusiness
     End Sub
 
     Public Sub UpdateRegion()
+        If myForm Is Nothing OrElse myForm.IsDisposed OrElse myMainPanel Is Nothing OrElse myMainPanel.IsDisposed Then Return
+        Dim view5 As frmMainscreen5 = TryCast(myForm, frmMainscreen5)
+        If view5 IsNot Nothing AndAlso view5.IsTakeoverInProgress Then
+            ' Keep full screen opaque while the Red Alert -> Klingon Virus takeover animation runs.
+            myForm.Region = Nothing
+            Return
+        End If
+        ' Setting the region and the working area can resize this window on the same stack.
+        If updateRegionDepth > 0 Then
+            modDiagnostics.LogStep("modBusiness.UpdateRegion", "skipped nested depth=" & updateRegionDepth & " screen=" & ScreenIndex)
+            Return
+        End If
         updateRegionDepth += 1
         Using diag As DiagnosticScope = modDiagnostics.BeginScope("modBusiness.UpdateRegion",
             "screen=" & ScreenIndex &
             " depth=" & updateRegionDepth &
             " form=" & myForm.Size.ToString() &
             " panel=" & If(myMainPanel Is Nothing, "null", myMainPanel.Bounds.ToString()))
-            If updateRegionDepth > 8 Then
-                modDiagnostics.LogWarn("modBusiness.UpdateRegion", "HIGH REENTRANCY depth=" & updateRegionDepth & " screen=" & ScreenIndex)
-            End If
             Try
                 Dim myRegion As Region = New Region(New RectangleF(0, 0, myForm.Width, myForm.Height))
                 Dim mainRect As New Rectangle(myForm.PointToClient(myMainPanel.PointToScreen(Drawing.Point.Empty)), myMainPanel.Size)
@@ -2178,7 +2693,6 @@ public Class modBusiness
                 UpdateWorkingArea()
             Catch ex As Exception
                 modDiagnostics.LogException("modBusiness.UpdateRegion", ex, "screen=" & ScreenIndex & " depth=" & updateRegionDepth)
-                Throw
             Finally
                 updateRegionDepth -= 1
             End Try
@@ -2186,6 +2700,7 @@ public Class modBusiness
     End Sub
 
     Public Sub UpdateWorkingArea()
+        If myForm Is Nothing OrElse myForm.IsDisposed OrElse myMainPanel Is Nothing OrElse myMainPanel.IsDisposed Then Return
         Using diag As DiagnosticScope = modDiagnostics.BeginScope("modBusiness.UpdateWorkingArea",
             "screen=" & ScreenIndex &
             " autohide=" & autohide.ToString() &
@@ -2206,9 +2721,13 @@ public Class modBusiness
                 If LinkedWindows.Count > 0 Then
                     Dim boundsCopy As Rectangle = adjustedBounds
                     Dim sourceMonitor As Integer = MonitorFromWindow(myForm.Handle, MONITOR_DEFAULTTONEAREST)
-                    If myForm IsNot Nothing AndAlso Not myForm.IsDisposed Then
+                    If myForm IsNot Nothing AndAlso Not myForm.IsDisposed AndAlso myForm.IsHandleCreated Then
                         myForm.BeginInvoke(New MethodInvoker(Sub()
-                                                                 NotifyLinkedWindowsWorkingArea(boundsCopy, sourceMonitor)
+                                                                 Try
+                                                                     NotifyLinkedWindowsWorkingArea(boundsCopy, sourceMonitor)
+                                                                 Catch notifyEx As Exception
+                                                                     modDiagnostics.LogException("modBusiness.NotifyLinkedWindowsWorkingArea", notifyEx, "screen=" & ScreenIndex)
+                                                                 End Try
                                                              End Sub))
                     Else
                         NotifyLinkedWindowsWorkingArea(boundsCopy, sourceMonitor)
@@ -2216,7 +2735,6 @@ public Class modBusiness
                 End If
             Catch ex As Exception
                 modDiagnostics.LogException("modBusiness.UpdateWorkingArea", ex, "screen=" & ScreenIndex)
-                Throw
             End Try
         End Using
     End Sub

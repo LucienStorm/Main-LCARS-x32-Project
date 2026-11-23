@@ -22,6 +22,22 @@ Public Module modQuickControls
     Private syncingQuickByScreen As New HashSet(Of Integer)
     Private pendingQuickSyncByScreen As New HashSet(Of Integer)
 
+    Public Sub DetachScreen(ByVal screenIndex As Integer)
+        quickButtonByScreen.Remove(screenIndex)
+        quickBusinessByScreen.Remove(screenIndex)
+        quickButtonHostByScreen.Remove(screenIndex)
+        batteryHudByScreen.Remove(screenIndex)
+        syncingQuickByScreen.Remove(screenIndex)
+        pendingQuickSyncByScreen.Remove(screenIndex)
+        If activePanel IsNot Nothing AndAlso Not activePanel.IsDisposed Then
+            Try
+                activePanel.Close()
+            Catch
+            End Try
+        End If
+        activePanel = Nothing
+    End Sub
+
     ''' <summary>
     ''' Adds a QUICK button left of the tray panel, matching ShowTrayButton style,
     ''' and keeps it glued to the tray as LCARS layouts move/resize.
@@ -31,9 +47,13 @@ Public Module modQuickControls
         Dim host As Control = ResolveQuickButtonHost(b)
         If host Is Nothing Then Return
         If quickButtonByScreen.ContainsKey(b.ScreenIndex) Then
-            EnsureQuickButtonOnHost(b, quickButtonByScreen(b.ScreenIndex))
-            SyncQuickButton(b)
-            Return
+            Dim existingBtn As LCARS.LCARSbuttonClass = quickButtonByScreen(b.ScreenIndex)
+            If existingBtn IsNot Nothing AndAlso Not existingBtn.IsDisposed Then
+                EnsureQuickButtonOnHost(b, existingBtn)
+                SyncQuickButton(b)
+                Return
+            End If
+            quickButtonByScreen.Remove(b.ScreenIndex)
         End If
 
         Dim btn As LCARS.LCARSbuttonClass = CreateQuickBarButton()
@@ -245,7 +265,11 @@ Public Module modQuickControls
 
     Private Function GetQuickButtonHost(ByVal b As modBusiness) As Control
         If quickButtonHostByScreen.ContainsKey(b.ScreenIndex) Then
-            Return quickButtonHostByScreen(b.ScreenIndex)
+            Dim cached As Control = quickButtonHostByScreen(b.ScreenIndex)
+            If cached IsNot Nothing AndAlso Not cached.IsDisposed Then
+                Return cached
+            End If
+            quickButtonHostByScreen.Remove(b.ScreenIndex)
         End If
         Return ResolveQuickButtonHost(b)
     End Function

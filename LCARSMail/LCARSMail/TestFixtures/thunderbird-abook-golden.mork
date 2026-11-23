@@ -1,0 +1,5 @@
+// <! <(meta 1)> // (f=iso-8859-1)
+// Golden TB-style column cells (^col^) + row-ref rows (slice 13 regression)
+(k=^90^PrimaryEmail^91^DisplayName^92^Company^93^FirstName^94^LastName)
+@10=^90^carol@example.net^91^Carol Example^92^Engineering^93^Carol^94^Example
+@11=<11>(d=PrimaryEmail)>dave@example.com<11>(d=DisplayName)>Dave Example<11>(d=Company)>Ops

@@ -28,6 +28,7 @@ Partial Class frmShutdown
         Me.sbExitMyComp = New LCARS.Controls.StandardButton
         Me.tbTitle = New LCARS.Controls.TextButton
         Me.sbLock = New LCARS.Controls.StandardButton
+        Me.sbRestartLcars = New LCARS.Controls.StandardButton
         Me.SuspendLayout()
         '
         'sbShutdown
@@ -148,12 +149,26 @@ Partial Class frmShutdown
         Me.sbLock.TabIndex = 63
         Me.sbLock.Text = "LOCK"
         '
+        'sbRestartLcars
+        '
+        Me.sbRestartLcars.Anchor = System.Windows.Forms.AnchorStyles.None
+        Me.sbRestartLcars.ButtonText = "RESTART LCARS"
+        Me.sbRestartLcars.ButtonTextAlign = System.Drawing.ContentAlignment.BottomRight
+        Me.sbRestartLcars.ButtonTextHeight = 16
+        Me.sbRestartLcars.Color = LCARS.LCARScolorStyles.SystemFunction
+        Me.sbRestartLcars.Location = New System.Drawing.Point(156, 219)
+        Me.sbRestartLcars.Name = "sbRestartLcars"
+        Me.sbRestartLcars.Size = New System.Drawing.Size(153, 36)
+        Me.sbRestartLcars.TabIndex = 64
+        Me.sbRestartLcars.Text = "RESTART LCARS"
+        '
         'frmShutdown
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(640, 480)
+        Me.Controls.Add(Me.sbRestartLcars)
         Me.Controls.Add(Me.sbLock)
         Me.Controls.Add(Me.tbTitle)
         Me.Controls.Add(Me.sbExitMyComp)
@@ -179,4 +194,5 @@ Partial Class frmShutdown
     Friend WithEvents sbExitMyComp As LCARS.Controls.StandardButton
     Friend WithEvents tbTitle As LCARS.Controls.TextButton
     Friend WithEvents sbLock As LCARS.Controls.StandardButton
+    Friend WithEvents sbRestartLcars As LCARS.Controls.StandardButton
 End Class

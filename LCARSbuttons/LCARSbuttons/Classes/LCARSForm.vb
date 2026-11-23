@@ -90,6 +90,12 @@ Public Class LCARSForm
     ''' </summary>
     Public Property BindToWorkingArea As Boolean = True
 
+    ''' <summary>
+    ''' When False, skip shell registration. Floating utilities keep this True so they
+    ''' still get color/alert/close broadcasts while BindToWorkingArea stays False.
+    ''' </summary>
+    Public Property RegisterWithLcarsShellEnabled As Boolean = True
+
     ' View 1 Start Menu: 100×25, top is 78px above working-area (pnlMain) bottom.
     ' App CLOSE must share that horizontal line on the right edge.
     Public Shared ReadOnly ShellStartMenuSize As New Size(100, 25)
@@ -195,7 +201,9 @@ Public Class LCARSForm
 
         Dim newBounds As Rectangle = CType(Marshal.PtrToStructure(myData.lpData, GetType(Rectangle)), Rectangle)
         Dim boundsCopy As Rectangle = newBounds
-        BeginInvoke(New MethodInvoker(Sub() ApplyWorkingAreaBounds(boundsCopy)))
+        BeginInvoke(New MethodInvoker(Sub()
+                                          If BindToWorkingArea Then ApplyWorkingAreaBounds(boundsCopy)
+                                      End Sub))
         m.Result = New IntPtr(1)
         Return True
     End Function
@@ -212,6 +220,7 @@ Public Class LCARSForm
     ''' directly — re-Maximizing fights FormBorderStyle.None and drops resize updates.
     ''' </summary>
     Protected Overridable Sub ApplyWorkingAreaBounds(ByVal bounds As Rectangle)
+        If BindToWorkingArea = False Then Return
         Try
             If bounds.Width <= 0 OrElse bounds.Height <= 0 Then Return
 
@@ -269,6 +278,7 @@ Public Class LCARSForm
     End Sub
 
     Private Sub RegisterWithLcarsShell()
+        If Not RegisterWithLcarsShellEnabled Then Return
         If registeredWithLcars OrElse Not Me.IsHandleCreated Then Return
         If X32_MSG = 0 Then
             X32_MSG = RegisterWindowMessageA("LCARS_X32_MSG")

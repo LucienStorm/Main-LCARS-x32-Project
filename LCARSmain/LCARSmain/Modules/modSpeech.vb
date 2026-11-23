@@ -190,33 +190,65 @@ Module modSpeech
 
     Public Property SpeechEnabled() As Boolean
         Get
-            If SpeechEngine Is Nothing Then
-                Return False
-            End If
-            Return Listener.State = SpeechRecoContextState.SRCS_Enabled
+            Try
+                If SpeechEngine Is Nothing Then
+                    Return False
+                End If
+                Return Listener.State = SpeechRecoContextState.SRCS_Enabled
+            Catch ex As Exception
+                ' Missing Interop.SpeechLib.dll (or SAPI) must not kill shell startup.
+                If TypeOf ex Is System.IO.FileNotFoundException OrElse
+                   TypeOf ex Is TypeLoadException OrElse
+                   TypeOf ex Is BadImageFormatException OrElse
+                   TypeOf ex Is Runtime.InteropServices.COMException Then
+                    Return False
+                End If
+                Throw
+            End Try
         End Get
         Set(ByVal value As Boolean)
-            If value Then
-                If SpeechEngine Is Nothing Or needsReload Then
-                    beginVoiceRecognition()
+            Try
+                If value Then
+                    If SpeechEngine Is Nothing Or needsReload Then
+                        beginVoiceRecognition()
+                    Else
+                        Listener.State = SpeechRecoContextState.SRCS_Enabled
+                    End If
                 Else
-                    Listener.State = SpeechRecoContextState.SRCS_Enabled
+                    If SpeechEngine IsNot Nothing Then
+                        Listener.State = SpeechRecoContextState.SRCS_Disabled
+                    End If
                 End If
-            Else
-                If SpeechEngine IsNot Nothing Then
-                    Listener.State = SpeechRecoContextState.SRCS_Disabled
+                RaiseEvent SpeechEnableChanged(Nothing, Nothing)
+            Catch ex As Exception
+                If TypeOf ex Is System.IO.FileNotFoundException OrElse
+                   TypeOf ex Is TypeLoadException OrElse
+                   TypeOf ex Is BadImageFormatException OrElse
+                   TypeOf ex Is Runtime.InteropServices.COMException Then
+                    Return
                 End If
-            End If
-            RaiseEvent SpeechEnableChanged(Nothing, Nothing)
+                Throw
+            End Try
         End Set
     End Property
 
     Public Sub RefreshSpeech()
-        If Not SpeechEnabled Then
-            needsReload = True
-        Else
-            beginVoiceRecognition()
-        End If
+        Try
+            If Not SpeechEnabled Then
+                needsReload = True
+            Else
+                beginVoiceRecognition()
+            End If
+        Catch ex As Exception
+            If TypeOf ex Is System.IO.FileNotFoundException OrElse
+               TypeOf ex Is TypeLoadException OrElse
+               TypeOf ex Is BadImageFormatException OrElse
+               TypeOf ex Is Runtime.InteropServices.COMException Then
+                needsReload = True
+                Return
+            End If
+            Throw
+        End Try
     End Sub
 
 #Region " Internal Command Subs "

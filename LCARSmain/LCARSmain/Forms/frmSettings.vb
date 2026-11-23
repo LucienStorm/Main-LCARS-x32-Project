@@ -127,12 +127,22 @@ Public Class frmSettings
         Dim mainScreenIndex As Integer = 1
         For Each myScreenType As Type In getMainScreenTypes()
             Dim myScreen As New LCScreenImage()
-            myScreen.Text = myScreenType.Name
             myScreen.Data = mainScreenIndex
-            Dim pInfo As Reflection.PropertyInfo = myScreenType.GetProperty("ScreenImage")
-            If Not pInfo Is Nothing Then
-                myScreen.Image = CType(pInfo.GetValue(Nothing, Nothing),  _
-                                    System.Drawing.Bitmap)
+            If Not IsMainScreenSelectable(myScreenType) Then
+                myScreen.Text = "SIGNAL LOST"
+                myScreen.Corrupted = True
+                myScreen.Image = CreateCorruptedPreviewImage()
+            Else
+                If GetType(frmMainscreen5).Equals(myScreenType) Then
+                    myScreen.Text = "KLINGON // MODE 05"
+                    myScreen.Color = LCARS.LCARScolorStyles.CriticalFunction
+                Else
+                    myScreen.Text = myScreenType.Name
+                End If
+                Dim pInfo As Reflection.PropertyInfo = myScreenType.GetProperty("ScreenImage")
+                If Not pInfo Is Nothing Then
+                    myScreen.Image = CType(pInfo.GetValue(Nothing, Nothing), System.Drawing.Bitmap)
+                End If
             End If
             AddHandler myScreen.Click, AddressOf mainScreen_Click
             gridScreens.Add(myScreen)
@@ -204,6 +214,7 @@ Public Class frmSettings
 
         InitBrowserHomeControls()
         InitWeatherControls()
+        InitKlingonTranslationControls()
 
         'Load Colors
         myFiles = System.IO.Directory.GetFiles(Application.StartupPath & "\colors", "*.lxcp")
@@ -847,10 +858,14 @@ Public Class frmSettings
     End Sub
 
     Private Sub mainScreen_Click(ByVal sender As Object, ByVal e As EventArgs)
+        Dim s As LCScreenImage = CType(sender, LCScreenImage)
+        If s.Corrupted Then Return
+        Dim types As List(Of Type) = getMainScreenTypes()
+        Dim idx As Integer = CInt(s.Data) - 1
+        If idx < 0 OrElse idx >= types.Count OrElse Not IsMainScreenSelectable(types(idx)) Then Return
         If selectedMainScreen IsNot Nothing Then
             selectedMainScreen.Selected = False
         End If
-        Dim s As LCScreenImage = CType(sender, LCScreenImage)
         s.Selected = True
         MainScreen(screenIndex) = CInt(s.Data)
         selectedMainScreen = s
@@ -861,11 +876,18 @@ Public Class frmSettings
         screenIndex = Integer.Parse(CType(sender, Label).Text)
         'Main screen
         Dim mainScreenIndex As Integer = MainScreen(screenIndex)
+        Dim types As List(Of Type) = getMainScreenTypes()
+        If mainScreenIndex < 1 OrElse mainScreenIndex > types.Count OrElse Not IsMainScreenSelectable(types(mainScreenIndex - 1)) Then
+            mainScreenIndex = 1
+            MainScreen(screenIndex) = 1
+        End If
         If selectedMainScreen IsNot Nothing Then
             selectedMainScreen.Selected = False
         End If
         selectedMainScreen = CType(gridScreens.Items(mainScreenIndex - 1), LCScreenImage)
-        selectedMainScreen.Selected = True
+        If Not selectedMainScreen.Corrupted Then
+            selectedMainScreen.Selected = True
+        End If
         'Autohide
         tglAutoHide.Lit = AutoHide(screenIndex)
         tglAutoHide.SideText = If(AutoHide(screenIndex), "ON", "OFF")
@@ -891,6 +913,19 @@ Public Class frmSettings
                 Exit For
             End If
         Next
+
+        ' Show Terran Translations toggle ONLY when Klingon mode (View 5) is selected
+        Dim isKlingonMode As Boolean = (mainScreenIndex = 5 AndAlso types.Count >= 5 AndAlso GetType(frmMainscreen5).Equals(types(4)))
+        If isKlingonMode Then
+            If tglKlingonTerranScreen IsNot Nothing AndAlso Not pnlMainScreen.Controls.Contains(tglKlingonTerranScreen) Then
+                pnlMainScreen.Controls.Add(tglKlingonTerranScreen)
+                tglKlingonTerranScreen.BringToFront()
+            End If
+        Else
+            If tglKlingonTerranScreen IsNot Nothing AndAlso pnlMainScreen.Controls.Contains(tglKlingonTerranScreen) Then
+                pnlMainScreen.Controls.Remove(tglKlingonTerranScreen)
+            End If
+        End If
     End Sub
 
     Private Sub fbBack_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles fbBack.Click
@@ -1350,6 +1385,38 @@ Public Class frmSettings
             MsgBox("Weather location set to:" & vbNewLine & city & vbNewLine & vbNewLine &
                   "Uses free Open-Meteo (no API key).", MsgBoxStyle.OkOnly, "Weather")
         End If
+    End Sub
+#End Region
+
+#Region " Klingon Terran Translations "
+    Private WithEvents tglKlingonTerranScreen As LCARS.Controls.ComplexButton
+
+    Private Sub InitKlingonTranslationControls()
+        ' Create the Terran Translations toggle (held off-panel until View 5 / Klingon mode is selected).
+        ' It is NOT shown in general settings (Appearance tab) and NOT on the main screen header.
+        If tglKlingonTerranScreen Is Nothing Then
+            tglKlingonTerranScreen = New LCARS.Controls.ComplexButton()
+            tglKlingonTerranScreen.ButtonText = "TERRAN TRANSLATIONS"
+            tglKlingonTerranScreen.Text = "TERRAN TRANSLATIONS"
+            tglKlingonTerranScreen.Color = LCARS.LCARScolorStyles.CriticalFunction
+            tglKlingonTerranScreen.SideBlockColor = LCARS.LCARScolorStyles.Orange
+            tglKlingonTerranScreen.SideTextColor = LCARS.LCARScolorStyles.Orange
+            tglKlingonTerranScreen.Lit = LCARS.x32.modSettings.KlingonTerranTranslations
+            tglKlingonTerranScreen.SideText = If(LCARS.x32.modSettings.KlingonTerranTranslations, "ON", "OFF")
+        End If
+    End Sub
+
+    Private Sub SyncKlingonTerranToggleUi(ByVal newState As Boolean)
+        LCARS.x32.modSettings.KlingonTerranTranslations = newState
+        If tglKlingonTerranScreen IsNot Nothing Then
+            tglKlingonTerranScreen.Lit = newState
+            tglKlingonTerranScreen.SideText = If(newState, "ON", "OFF")
+        End If
+        frmMainscreen5.RefreshAllKlingonTranslationStates()
+    End Sub
+
+    Private Sub tglKlingonTerranScreen_Click(ByVal sender As Object, ByVal e As EventArgs) Handles tglKlingonTerranScreen.Click
+        SyncKlingonTerranToggleUi(Not LCARS.x32.modSettings.KlingonTerranTranslations)
     End Sub
 #End Region
 End Class

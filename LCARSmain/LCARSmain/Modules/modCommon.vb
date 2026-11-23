@@ -1,5 +1,5 @@
+Imports System.Drawing
 Imports System.Runtime.InteropServices
-
 
 Module modCommon
 
@@ -161,7 +161,7 @@ Module modCommon
 #Region " Send Data to Other Windows "
     <StructLayout(LayoutKind.Sequential)> _
   Public Structure COPYDATASTRUCT
-        Public dwData As Integer
+        Public dwData As IntPtr
         Public cdData As Integer
         Public lpData As IntPtr
     End Structure
@@ -209,7 +209,11 @@ Module modCommon
         If IntPtr.Size = 4 Then
             Return GetWindowLong(hwnd, nIndex)
         Else
-            Return GetWindowLongPtr(hwnd, nIndex)
+            Dim raw As Long = GetWindowLongPtr(hwnd, nIndex).ToInt64() And &HFFFFFFFFL
+            If raw > Integer.MaxValue Then
+                Return CInt(raw - &H100000000L)
+            End If
+            Return CInt(raw)
         End If
     End Function
     Private Declare Auto Function SetWindowLongPtr Lib "User32.Dll" Alias "SetWindowLongPtrA" (ByVal hWnd As IntPtr, ByVal nIndex As Integer, ByVal dwNewLong As IntPtr) As Integer
@@ -504,6 +508,38 @@ Public Enum SetWindowPosFlags As UInteger
         End If
     End Sub
 
+    ''' <summary>
+    ''' Reloads the user's saved wallpaper (Federation logo or custom file) onto the desktop hole.
+    ''' Does not change the stored Wallpaper setting.
+    ''' </summary>
+    Public Sub ApplySavedWallpaper(ByVal ScreenIndex As Integer)
+        If My.Application.IsSettingsMode Then Return
+        If myDesktop Is Nothing OrElse ScreenIndex < 0 OrElse ScreenIndex >= myDesktop.curDesktop.Count Then Return
+
+        Dim sizeMode As Integer = LCARS.x32.modSettings.WallpaperSizeMode(ScreenIndex)
+        Select Case sizeMode
+            Case 0
+                setWallpaperSizeMode(ImageLayout.Zoom, ScreenIndex)
+            Case 1
+                setWallpaperSizeMode(ImageLayout.Stretch, ScreenIndex)
+            Case 2
+                setWallpaperSizeMode(ImageLayout.Center, ScreenIndex)
+            Case 3
+                setWallpaperSizeMode(ImageLayout.Tile, ScreenIndex)
+            Case Else
+                setWallpaperSizeMode(ImageLayout.Center, ScreenIndex)
+        End Select
+
+        Dim wallpaper As String = LCARS.x32.modSettings.Wallpaper(ScreenIndex)
+        If wallpaper = "FederationLogo" Then
+            SetWallpaper(My.Resources.federationLogo, ScreenIndex)
+        ElseIf System.IO.File.Exists(wallpaper) Then
+            SetWallpaper(Image.FromFile(wallpaper), ScreenIndex)
+        Else
+            SetWallpaper(My.Resources.federationLogo, ScreenIndex)
+        End If
+    End Sub
+
     Public Sub SetAutoHide(ByVal hide As IAutohide.AutoHideModes, ByVal ScreenIndex As Integer)
         If Not My.Application.IsSettingsMode Then
             curBusiness(ScreenIndex).SetAutoHide(hide)
@@ -600,8 +636,8 @@ Public Enum SetWindowPosFlags As UInteger
         Return myPlacement.ShowCmd
     End Function
 
-    Public Sub resizeWorkingArea(ByVal x As Integer, ByVal y As Integer, ByVal width As Integer, ByVal height As Integer)
-        modDiagnostics.LogInfo("modCommon.resizeWorkingArea", "x=" & x & " y=" & y & " w=" & width & " h=" & height & " shellMode=" & shellMode)
+    Public Sub resizeWorkingArea(ByVal x As Integer, ByVal y As Integer, ByVal width As Integer, ByVal height As Integer, Optional ByVal broadcast As Boolean = False)
+        modDiagnostics.LogInfo("modCommon.resizeWorkingArea", "x=" & x & " y=" & y & " w=" & width & " h=" & height & " shellMode=" & shellMode & " broadcast=" & broadcast)
         Dim myArea As New RECT
         myArea.Left = x
         myArea.Top = y
@@ -614,11 +650,9 @@ Public Enum SetWindowPosFlags As UInteger
 
         Marshal.StructureToPtr(myArea, ptr, False)
 
-        If shellMode Then
-            Dim i As Integer = SystemParametersInfo(SPI_SETWORKAREA, Marshal.SizeOf(myArea), ptr, SPIF_change)
-        Else
-            Dim i As Integer = SystemParametersInfo(SPI_SETWORKAREA, Marshal.SizeOf(myArea), ptr, SPIF_UPDATEINIFILE)
-        End If
+        Dim flags As Integer = SPIF_UPDATEINIFILE
+        If shellMode OrElse broadcast Then flags = SPIF_change
+        Dim i As Integer = SystemParametersInfo(SPI_SETWORKAREA, Marshal.SizeOf(myArea), ptr, flags)
         Marshal.FreeHGlobal(ptr)
     End Sub
 
@@ -710,6 +744,131 @@ Public Enum SetWindowPosFlags As UInteger
         Return typeList
     End Function
 
+    ''' <summary>
+    ''' View 5 is the Klingon tactical interface (now selectable).
+    ''' </summary>
+    Public Function IsMainScreenSelectable(ByVal screenType As Type) As Boolean
+        If screenType Is Nothing Then Return False
+        Return True
+    End Function
+
+    ''' <summary>Anomalous Klingon tactical preview tile for View 5.</summary>
+    Public Function CreateCorruptedPreviewImage() As Bitmap
+        Dim bmp As New Bitmap(320, 200)
+        Using g As Graphics = Graphics.FromImage(bmp)
+            g.SmoothingMode = Drawing2D.SmoothingMode.AntiAlias
+            g.Clear(Drawing.Color.Black)
+
+            ' Subspace scanline grid & tactical red/amber interference
+            Dim rng As New Random(1701)
+            For y As Integer = 0 To bmp.Height - 1 Step 4
+                Dim alpha As Integer = 35 + rng.Next(0, 50)
+                Using bar As New SolidBrush(Drawing.Color.FromArgb(alpha, 160 + rng.Next(0, 80), 15 + rng.Next(0, 25), 0))
+                    g.FillRectangle(bar, 0, y, bmp.Width, 1)
+                End Using
+            Next
+
+            ' Angular Klingon chamfered frame border
+            Dim outerPts As Point() = {
+                New Point(18, 8),
+                New Point(302, 8),
+                New Point(312, 18),
+                New Point(312, 152),
+                New Point(296, 168),
+                New Point(24, 168),
+                New Point(8, 152),
+                New Point(8, 18)
+            }
+            Using framePen As New Pen(Drawing.Color.FromArgb(255, 204, 17, 0), 3.0F)
+                g.DrawPolygon(framePen, outerPts)
+            End Using
+            Using innerPen As New Pen(Drawing.Color.FromArgb(220, 255, 153, 0), 1.2F)
+                Dim innerPts As Point() = {
+                    New Point(22, 13),
+                    New Point(298, 13),
+                    New Point(307, 22),
+                    New Point(307, 149),
+                    New Point(293, 163),
+                    New Point(27, 163),
+                    New Point(13, 149),
+                    New Point(13, 22)
+                }
+                g.DrawPolygon(innerPen, innerPts)
+            End Using
+
+            ' Klingon trefoil emblem silhouette in center
+            Dim cx As Single = bmp.Width / 2.0F
+            Dim cy As Single = 78.0F
+            Using ringPen As New Pen(Drawing.Color.FromArgb(210, 255, 60, 0), 2.5F)
+                g.DrawEllipse(ringPen, cx - 24, cy - 18, 48, 48)
+            End Using
+            Dim spike As PointF() = {
+                New PointF(cx, cy - 42),
+                New PointF(cx + 9, cy + 4),
+                New PointF(cx, cy + 14),
+                New PointF(cx - 9, cy + 4)
+            }
+            Dim leftWing As PointF() = {
+                New PointF(cx - 6, cy + 2),
+                New PointF(cx - 32, cy + 26),
+                New PointF(cx - 12, cy + 16),
+                New PointF(cx - 2, cy + 12)
+            }
+            Dim rightWing As PointF() = {
+                New PointF(cx + 6, cy + 2),
+                New PointF(cx + 32, cy + 22),
+                New PointF(cx + 12, cy + 16),
+                New PointF(cx + 2, cy + 12)
+            }
+            Using emblemBrush As New SolidBrush(Drawing.Color.FromArgb(235, 220, 30, 0))
+                g.FillPolygon(emblemBrush, spike)
+                g.FillPolygon(emblemBrush, leftWing)
+                g.FillPolygon(emblemBrush, rightWing)
+            End Using
+
+            ' Tactical hazard triangles along bottom bar
+            For idx As Integer = 0 To 4
+                Dim tx As Integer = 98 + idx * 26
+                Dim ty As Integer = 136
+                Dim tri As Point() = {
+                    New Point(tx + 10, ty),
+                    New Point(tx + 20, ty + 18),
+                    New Point(tx, ty + 18)
+                }
+                Dim c As Color = If(idx Mod 2 = 0, Drawing.Color.FromArgb(255, 255, 160, 0), Drawing.Color.FromArgb(255, 204, 17, 0))
+                Using tb As New SolidBrush(c)
+                    g.FillPolygon(tb, tri)
+                End Using
+            Next
+
+            ' Glitch bars
+            For i As Integer = 0 To 22
+                Using speck As New SolidBrush(Drawing.Color.FromArgb(140, 255, 60 + rng.Next(0, 120), 20))
+                    g.FillRectangle(speck, rng.Next(12, bmp.Width - 24), rng.Next(12, bmp.Height - 24), rng.Next(4, 24), 2)
+                End Using
+            Next
+
+            Dim fnt As Font = Nothing
+            Try
+                fnt = New Font("LCARS", 15.0F, FontStyle.Regular, GraphicsUnit.Point)
+            Catch
+                fnt = New Font(FontFamily.GenericSansSerif, 12.0F, FontStyle.Bold)
+            End Try
+            Using fnt
+                Dim fmt As New StringFormat()
+                fmt.Alignment = StringAlignment.Center
+                fmt.LineAlignment = StringAlignment.Center
+                Using brush As New SolidBrush(Drawing.Color.FromArgb(255, 255, 60, 30))
+                    g.DrawString("▲  tlhIngan wo' // ANOMALY  ▲", fnt, brush, New RectangleF(0, 16, bmp.Width, 24), fmt)
+                End Using
+                Using brush2 As New SolidBrush(Drawing.Color.FromArgb(255, 255, 180, 0))
+                    g.DrawString("KLINGON TACTICAL MODE 05", fnt, brush2, New RectangleF(0, 171, bmp.Width, 26), fmt)
+                End Using
+            End Using
+        End Using
+        Return bmp
+    End Function
+
     Public Sub updateDesktopBounds(ByVal ScreenIndex As Integer, ByVal newBounds As Rectangle)
         modDiagnostics.LogInfo("modCommon.updateDesktopBounds", "screen=" & ScreenIndex & " bounds=" & newBounds.ToString())
         myDesktop.curDesktop(ScreenIndex).Bounds = _
@@ -727,7 +886,7 @@ Public Enum SetWindowPosFlags As UInteger
             "count=" & LinkedWindows.Count & " bounds=" & adjustedBounds.ToString())
 
         Dim myRectData As New COPYDATASTRUCT
-        myRectData.dwData = 100
+        myRectData.dwData = New IntPtr(100)
         myRectData.cdData = Marshal.SizeOf(GetType(Rectangle))
 
         Dim rectPtr As IntPtr = Marshal.AllocCoTaskMem(myRectData.cdData)

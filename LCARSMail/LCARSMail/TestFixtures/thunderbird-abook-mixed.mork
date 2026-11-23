@@ -1,0 +1,6 @@
+// <! <(meta 1)> // (f=iso-8859-1)
+// Two (k=) column maps in one abook fragment (slice 13 multi-table)
+(k=^60^PrimaryEmail^61^DisplayName^62^Company)
+(k=^80^PrimaryEmail^81^DisplayName^82^NickName)
+@5=^60^mixed@example.com^61^Mixed Table A^62^Ops
+@6=^80^alt@example.net^81^Alt Row^82^Altie
