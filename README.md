@@ -147,5 +147,3 @@ On the GitHub repository **About** box (right-hand sidebar, gear icon), set:
 - **Website:** optional (your project page or upstream)
 - **Topics:** `lcars`, `star-trek`, `winforms`, `vb-net`, `windows-shell`, `desktop`
 - **Social preview:** upload `Screenshots/mode-1.png` (or a cropped hero) under *Settings → General → Social preview* so link unfurls show the UI
-
-Those are GitHub UI settings, not files in the repo.
